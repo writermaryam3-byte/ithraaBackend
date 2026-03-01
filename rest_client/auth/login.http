@@ -1,0 +1,7 @@
+POST http://localhost:3000/auth/login
+Content-Type: application/json
+
+{
+  "password": "StrongPass1@",
+  "phone": "+201055123567"
+}

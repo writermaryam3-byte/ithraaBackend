@@ -34,8 +34,8 @@ export class AuthController {
   @Post('signup')
   async signup(@Body() dto: CreateUserDto) {
     const alreadyExits = await this.authService.isAlreadyExits(
-      dto.phone as string,
-      dto.email as string,
+      dto.phone,
+      dto.email,
     );
     if (alreadyExits)
       return {
@@ -76,6 +76,6 @@ export class AuthController {
 
   @Delete('logout-all')
   async logoutAll(@Req() req) {
-    await this.sessionsService.deleteAllUserSessions(req.user.userId);
+    await this.sessionsService.deleteAllUserSessions(req.user.id);
   }
 }

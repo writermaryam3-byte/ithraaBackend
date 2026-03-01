@@ -67,6 +67,9 @@ export class AuthService {
   }
 
   async signup(user: CreateUserDto) {
-    return await this.usersService.create(user);
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    const { password, password_hash, ...userWithoutPassword } =
+      await this.usersService.create(user);
+    return userWithoutPassword;
   }
 }

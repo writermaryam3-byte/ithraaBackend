@@ -1,19 +1,36 @@
-import { IsEmail, IsEnum, IsString } from 'class-validator';
+import { Transform } from 'class-transformer';
+import {
+  IsEmail,
+  IsEnum,
+  IsPhoneNumber,
+  IsString,
+  Length,
+  Matches,
+} from 'class-validator';
 import { Role } from 'src/common/enums/role.enum';
 
 export class CreateUserDto {
   @IsString()
-  name;
+  @Length(2, 50)
+  @Transform(({ value }: { value: string }) => value.trim())
+  name: string;
 
   @IsEmail()
-  email;
+  @Transform(({ value }: { value: string }) => value.toLowerCase().trim())
+  email: string;
 
   @IsString()
-  password;
-
-  @IsString()
-  phone;
+  @Length(8, 100, {
+    message: 'Password must be at least 8 characters',
+  })
+  @Matches(/^(?=.*[A-Z])(?=.*[a-z])(?=.*\d)(?=.*[@$!%*?&])/, {
+    message:
+      'Password must contain uppercase, lowercase, number and special character',
+  })
+  password: string;
+  @IsPhoneNumber()
+  phone: string;
 
   @IsEnum(Role)
-  role;
+  role: Role;
 }

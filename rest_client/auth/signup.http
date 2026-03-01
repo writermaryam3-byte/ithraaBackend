@@ -1,0 +1,10 @@
+POST http://localhost:3000/auth/signup
+Content-Type: application/json
+
+{
+  "name": "Ziad Zayed",
+  "email": "zIfffAD.TEffSfT@GMAIL.COM",
+  "password": "StrongPass1@",
+  "phone": "+201055123567",
+  "role": "user"
+}
