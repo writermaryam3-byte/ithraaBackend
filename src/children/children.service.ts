@@ -10,7 +10,7 @@ export class ChildrenService {
   constructor(
     @InjectRepository(Child)
     private childrenRepository: Repository<Child>,
-  ) { }
+  ) {}
   create(createChildDto: CreateChildDto) {
     const child = this.childrenRepository.save(createChildDto);
     return child;

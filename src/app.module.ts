@@ -8,9 +8,13 @@ import { OrganizationsModule } from './organizations/organizations.module';
 import { EmployeesModule } from './employees/employees.module';
 import { EnrichersModule } from './enrichers/enrichers.module';
 import { TestsModule } from './tests/tests.module';
+import { AuthModule } from './auth/auth.module';
+import { ConfigModule } from '@nestjs/config';
+import { SessionModule } from './session/session.module';
 
 @Module({
   imports: [
+    ConfigModule.forRoot({ isGlobal: true }),
     ChildrenModule,
     TypeOrmModule.forRoot({
       type: 'postgres',
@@ -28,6 +32,8 @@ import { TestsModule } from './tests/tests.module';
     EmployeesModule,
     EnrichersModule,
     TestsModule,
+    AuthModule,
+    SessionModule,
   ],
   controllers: [AppController],
   providers: [AppService],

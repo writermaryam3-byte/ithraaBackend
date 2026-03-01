@@ -1,3 +1,4 @@
+import { Exclude } from 'class-transformer';
 import { Child } from 'src/children/entities/child.entity';
 import { Role } from 'src/common/enums/role.enum';
 import { Organization } from 'src/organizations/entities/organization.entity';
@@ -22,9 +23,10 @@ export class User {
   email: string;
 
   @Column()
+  @Exclude()
   password_hash: string;
 
-  @Column({ nullable: true })
+  @Column({ unique: true })
   phone: string;
 
   @Column({ type: 'enum', enum: Role, default: Role.USER })
