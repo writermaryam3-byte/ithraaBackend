@@ -1,7 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import * as bcrypt from 'bcrypt';
-import { Role } from 'src/common/enums/role.enum';
+import { UserRole } from 'src/common/enums/role.enum';
 import { SessionService } from 'src/session/session.service';
 import { CreateUserDto } from 'src/users/dto/create-user.dto';
 import { User } from 'src/users/entities/user.entity';
@@ -11,7 +11,7 @@ export type TokenPayload = {
   sub: string;
   email: string;
   phone: string;
-  role: Role;
+  role: UserRole;
 };
 
 @Injectable()

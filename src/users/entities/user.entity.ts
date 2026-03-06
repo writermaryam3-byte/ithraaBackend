@@ -1,6 +1,6 @@
 import { Exclude } from 'class-transformer';
 import { Child } from 'src/children/entities/child.entity';
-import { Role } from 'src/common/enums/role.enum';
+import { UserRole } from 'src/common/enums/role.enum';
 import { Organization } from 'src/organizations/entities/organization.entity';
 import {
   Entity,
@@ -29,8 +29,8 @@ export class User {
   @Column({ unique: true })
   phone: string;
 
-  @Column({ type: 'enum', enum: Role, default: Role.USER })
-  role: Role;
+  @Column({ type: 'enum', enum: UserRole, default: UserRole.PARENT })
+  role: UserRole;
 
   @OneToMany(() => Organization, (org) => org.owner)
   organizations: Organization[];

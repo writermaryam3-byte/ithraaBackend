@@ -6,5 +6,5 @@ Content-Type: application/json
   "email": "zIfffAD.TEffSfT@GMAIL.COM",
   "password": "StrongPass1@",
   "phone": "+201055123567",
-  "role": "user"
+  "role": "ADMIN"
 }

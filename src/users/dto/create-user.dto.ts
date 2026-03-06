@@ -7,7 +7,7 @@ import {
   Length,
   Matches,
 } from 'class-validator';
-import { Role } from 'src/common/enums/role.enum';
+import { UserRole } from 'src/common/enums/role.enum';
 
 export class CreateUserDto {
   @IsString()
@@ -31,6 +31,6 @@ export class CreateUserDto {
   @IsPhoneNumber()
   phone: string;
 
-  @IsEnum(Role)
-  role: Role;
+  @IsEnum(UserRole)
+  role: UserRole;
 }

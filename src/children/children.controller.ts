@@ -14,7 +14,7 @@ import { UpdateChildDto } from './dto/update-child.dto';
 import { JwtAuthGuard } from 'src/auth/guards/auth.guard';
 import { Roles } from 'src/auth/decorators/role.decorator';
 import { RolesGuard } from 'src/auth/guards/roles.guard';
-import { Role } from 'src/common/enums/role.enum';
+import { UserRole } from 'src/common/enums/role.enum';
 
 @Controller('children')
 export class ChildrenController {
@@ -25,7 +25,7 @@ export class ChildrenController {
     return this.childrenService.create(createChildDto);
   }
 
-  @Roles(Role.ADMIN)
+  @Roles(UserRole.ADMIN)
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Get()
   findAll() {
