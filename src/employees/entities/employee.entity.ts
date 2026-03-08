@@ -1,13 +1,21 @@
 import { Organization } from 'src/organizations/entities/organization.entity';
 import { User } from 'src/users/entities/user.entity';
-import { Entity, PrimaryGeneratedColumn, Column, ManyToOne } from 'typeorm';
+import {
+  Entity,
+  PrimaryGeneratedColumn,
+  Column,
+  ManyToOne,
+  JoinColumn,
+  OneToOne,
+} from 'typeorm';
 
 @Entity('employees')
 export class Employee {
   @PrimaryGeneratedColumn('uuid')
   id: string;
 
-  @ManyToOne(() => User)
+  @OneToOne(() => User)
+  @JoinColumn()
   user: User;
 
   @ManyToOne(() => Organization, (org) => org.employees)

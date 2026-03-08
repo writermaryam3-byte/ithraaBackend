@@ -1,6 +1,7 @@
 import { Exclude } from 'class-transformer';
 import { Child } from 'src/children/entities/child.entity';
 import { UserRole } from 'src/common/enums/role.enum';
+import { Employee } from 'src/employees/entities/employee.entity';
 import { Enricher } from 'src/enrichers/entities/enricher.entity';
 import { Organization } from 'src/organizations/entities/organization.entity';
 import {
@@ -39,6 +40,9 @@ export class User {
 
   @OneToOne(() => Enricher, (enricher) => enricher.user)
   enricher: Enricher;
+
+  @OneToOne(() => Employee, (employee) => employee.user)
+  employee: Employee;
 
   @OneToMany(() => Child, (child) => child.user)
   children: Child[];

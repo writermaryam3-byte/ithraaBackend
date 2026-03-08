@@ -1,0 +1,13 @@
+
+POST http://localhost:5000/employees
+Content-Type: application/json
+Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIyNGFhODY0Mi0yMWQ3LTQ3NGEtYTMzMy1mYzVlOTZjYWVjMDMiLCJlbWFpbCI6InppZnNmZmZhZC50ZWZmZnNmdEBnbWFpbC5jb20iLCJwaG9uZSI6IisyMDEwOTIwODQzNzUiLCJyb2xlIjoib3JnYW5pemF0aW9uX293bmVyIiwiaWF0IjoxNzcyOTY2NDcyLCJleHAiOjE3NzI5NjczNzJ9.7upOjZCeOzOcRgmmd7LQSxBy-3NSlH63MtiSQB62Si0
+
+{
+    "job_title": "teacher",
+    "organization_id": "93c4b384-4f2b-46b1-bafe-b2f560b05bdd",
+    "name": "employee1",
+    "email": "emplyee@tesst.com",
+    "password": "employeeA!#22",
+    "phone": "+201058854455"
+}

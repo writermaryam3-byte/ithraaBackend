@@ -3,5 +3,15 @@ Content-Type: application/json
 
 {
   "password": "StrongPass1@",
-  "phone": "+201092084375"
+  "phone": "+201056565555544"
+}
+
+### login admin
+
+POST http://localhost:5000/auth/login
+Content-Type: application/json
+
+{
+  "password": "StrongPass1@",
+  "phone": "+201055084375"
 }

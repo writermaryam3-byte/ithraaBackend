@@ -1,12 +1,14 @@
 import {
   BadRequestException,
   Body,
+  ClassSerializerInterceptor,
   Controller,
   Delete,
   Param,
   Post,
   Req,
   UnauthorizedException,
+  UseInterceptors,
 } from '@nestjs/common';
 import { AuthService, TokenPayload } from './auth.service';
 import { LoginDto } from './dto/login.dto';
@@ -32,7 +34,7 @@ export class AuthController {
 
     return this.authService.login(user);
   }
-
+  @UseInterceptors(ClassSerializerInterceptor)
   @Post('beneficiaries-signup')
   async beneficiariesSiginup(@Body() dto: BeneficiariesSignupDto) {
     const alreadyExists = await this.authService.isAlreadyExits(
@@ -44,7 +46,7 @@ export class AuthController {
     }
     return this.authService.beneficiariesSignup(dto);
   }
-
+  @UseInterceptors(ClassSerializerInterceptor)
   @Post('enrichers-signup')
   async enrichersSignup(@Body() dto: EnrichersSignupDto) {
     const alreadyExists = await this.authService.isAlreadyExits(
