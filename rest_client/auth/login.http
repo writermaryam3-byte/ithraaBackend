@@ -1,9 +1,10 @@
+### login employee
 POST http://localhost:5000/auth/login
 Content-Type: application/json
 
 {
-  "password": "StrongPass1@",
-  "phone": "+201056565555544"
+  "password": "employeeA!#22",
+  "phone": "+201058854455"
 }
 
 ### login admin

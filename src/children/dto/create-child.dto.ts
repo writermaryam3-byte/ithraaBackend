@@ -23,8 +23,8 @@ export class CreateChildDto {
 
   @IsOptional()
   @IsUUID()
-  organizationId?: string;
+  organization_id?: string;
 
   @IsUUID()
-  userId: string;
+  user_id: string;
 }

@@ -11,9 +11,9 @@ export class ChildrenService {
     @InjectRepository(Child)
     private childrenRepository: Repository<Child>,
   ) {}
+
   create(createChildDto: CreateChildDto) {
-    const child = this.childrenRepository.save(createChildDto);
-    return child;
+    return this.childrenRepository.save(createChildDto);
   }
 
   findAll() {

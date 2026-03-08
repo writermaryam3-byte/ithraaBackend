@@ -19,7 +19,13 @@ import { UserRole } from 'src/common/enums/role.enum';
 @Controller('children')
 export class ChildrenController {
   constructor(private readonly childrenService: ChildrenService) {}
-
+  @Roles(
+    UserRole.EMPLOYEE,
+    UserRole.ORGANIZATIONOWNER,
+    UserRole.PARENT,
+    UserRole.TEACHER,
+  )
+  @UseGuards(JwtAuthGuard, RolesGuard)
   @Post()
   create(@Body() createChildDto: CreateChildDto) {
     return this.childrenService.create(createChildDto);

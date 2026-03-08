@@ -1,0 +1,14 @@
+
+POST http://localhost:5000/children
+Content-Type: application/json
+Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJlMjM4N2UwOS04ZThmLTQ3NzgtYjE3Ny1lZmE5MjcyZDc5NGUiLCJlbWFpbCI6ImVtcGx5ZWVAdGVzc3QuY29tIiwicGhvbmUiOiIrMjAxMDU4ODU0NDU1Iiwicm9sZSI6ImVtcGxveWVlIiwiaWF0IjoxNzcyOTc1OTExLCJleHAiOjE3NzI5NzY4MTF9.sna3qIdtbYGlZdwjjUCK0Ov4w_a4KXu-u41M4xH4a3s
+
+{
+    "organization_id": "93c4b384-4f2b-46b1-bafe-b2f560b05bdd",
+    "name": "child1",
+    "user_id": "e2387e09-8e8f-4778-b177-efa9272d794e",
+    "gender": "male",
+    "grade": "grade 1",
+    "birthDate": "2025-12-15"
+
+}
