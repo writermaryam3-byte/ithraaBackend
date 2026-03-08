@@ -1,6 +1,7 @@
 import { Exclude } from 'class-transformer';
 import { Child } from 'src/children/entities/child.entity';
 import { UserRole } from 'src/common/enums/role.enum';
+import { Enricher } from 'src/enrichers/entities/enricher.entity';
 import { Organization } from 'src/organizations/entities/organization.entity';
 import {
   Entity,
@@ -9,6 +10,7 @@ import {
   OneToMany,
   CreateDateColumn,
   UpdateDateColumn,
+  OneToOne,
 } from 'typeorm';
 
 @Entity('users')
@@ -34,6 +36,9 @@ export class User {
 
   @OneToMany(() => Organization, (org) => org.owner)
   organizations: Organization[];
+
+  @OneToOne(() => Enricher, (enricher) => enricher.user)
+  enricher: Enricher;
 
   @OneToMany(() => Child, (child) => child.user)
   children: Child[];

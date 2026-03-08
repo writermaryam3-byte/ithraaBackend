@@ -1,13 +1,20 @@
 import { ApprovalStatus } from 'src/common/enums/approval-status.enum';
 import { User } from 'src/users/entities/user.entity';
-import { Entity, PrimaryGeneratedColumn, Column, ManyToOne } from 'typeorm';
+import {
+  Entity,
+  PrimaryGeneratedColumn,
+  Column,
+  OneToOne,
+  JoinColumn,
+} from 'typeorm';
 
 @Entity('enrichers')
 export class Enricher {
   @PrimaryGeneratedColumn('uuid')
   id: string;
 
-  @ManyToOne(() => User)
+  @OneToOne(() => User)
+  @JoinColumn()
   user: User;
 
   @Column()

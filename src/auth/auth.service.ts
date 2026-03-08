@@ -8,6 +8,9 @@ import { UsersService } from 'src/users/users.service';
 import { type BeneficiariesSignupDto } from './dto/beneficiaries/beneficiaries-signup.dto';
 import { DataSource } from 'typeorm';
 import { SignupStrategyFactory } from './factories/signup.factory';
+import { EnrichersSignupDto } from './dto/enrichers/enrichers-signup.dto';
+import { Enricher } from 'src/enrichers/entities/enricher.entity';
+import { AccountType } from 'src/common/enums/account-type.enum';
 
 export type TokenPayload = {
   sub: string;
@@ -75,7 +78,7 @@ export class AuthService {
       const strategy = this.strategyFactory.getStrategy(dto.account_type);
 
       switch (dto.account_type) {
-        case 'organization': {
+        case AccountType.ORGANIZATION: {
           const user = await this.usersService.create(
             {
               email: dto.email,
@@ -90,6 +93,30 @@ export class AuthService {
           return user;
         }
       }
+    });
+  }
+
+  async enrichersSignup(dto: EnrichersSignupDto) {
+    return this.dataSource.transaction(async (manager) => {
+      const user = await this.usersService.create(
+        {
+          email: dto.email,
+          phone: dto.phone,
+          name: dto.name,
+          password: dto.password,
+        },
+        UserRole.ENRICHER,
+        manager,
+      );
+
+      const enricher = manager.create(Enricher, {
+        organization_name: dto.organizationName,
+        user,
+      });
+
+      await manager.save(enricher);
+
+      return { user, enricher };
     });
   }
 }

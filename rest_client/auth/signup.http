@@ -1,6 +1,6 @@
+### beneficiaries-signup
 POST http://localhost:5000/auth/beneficiaries-signup
 Content-Type: application/json
-
 {
   "name": "Ziad Zayed",
   "email": "zIfsfffAD.TEfffSfT@GMAIL.COM",
@@ -9,4 +9,16 @@ Content-Type: application/json
   "account_type": "organization",
   "organization_name": "org1",
   "organization_type": "nursery"
+}
+### enrichers-signup
+POST http://localhost:5000/auth/enrichers-signup
+Content-Type: application/json
+
+{
+  "name": "Ziad Zayed",
+  "email": "zIffsfffAD.TEfffSfT@GMAIL.COM",
+  "password": "StrongPass1@",
+  "phone": "+201055084375",
+  "accountType": "organization",
+  "organizationName": "enricher",
 }
