@@ -1,13 +1,13 @@
 import { Transform } from 'class-transformer';
 import {
-  IsEmail,
-  IsPhoneNumber,
   IsString,
   Length,
+  IsEmail,
   Matches,
+  IsPhoneNumber,
 } from 'class-validator';
 
-export class CreateUserDto {
+export class BaseSignupDto {
   @IsString()
   @Length(2, 50)
   @Transform(({ value }: { value: string }) => value.trim())

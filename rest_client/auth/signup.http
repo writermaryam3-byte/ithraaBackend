@@ -1,10 +1,12 @@
-POST http://localhost:3000/auth/signup
+POST http://localhost:5000/auth/beneficiaries-signup
 Content-Type: application/json
 
 {
   "name": "Ziad Zayed",
-  "email": "zIfffAD.TEffSfT@GMAIL.COM",
+  "email": "zIfsfffAD.TEfffSfT@GMAIL.COM",
   "password": "StrongPass1@",
-  "phone": "+201055123567",
-  "role": "ADMIN"
+  "phone": "+201092084375",
+  "account_type": "organization",
+  "organization_name": "org1",
+  "organization_type": "nursery"
 }

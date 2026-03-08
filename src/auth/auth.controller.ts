@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   Body,
   Controller,
   Delete,
@@ -9,11 +10,11 @@ import {
 } from '@nestjs/common';
 import { AuthService, TokenPayload } from './auth.service';
 import { LoginDto } from './dto/login.dto';
-import { CreateUserDto } from 'src/users/dto/create-user.dto';
 import { JwtService } from '@nestjs/jwt';
 import { SessionService } from 'src/session/session.service';
 import bcrypt from 'bcrypt';
 import { UsersService } from 'src/users/users.service';
+import { BeneficiariesSignupDto } from './dto/beneficiaries/beneficiaries-signup.dto';
 @Controller('auth')
 export class AuthController {
   constructor(
@@ -31,19 +32,16 @@ export class AuthController {
     return this.authService.login(user);
   }
 
-  @Post('signup')
-  async signup(@Body() dto: CreateUserDto) {
-    const alreadyExits = await this.authService.isAlreadyExits(
+  @Post('beneficiaries-signup')
+  async beneficiariesSiginup(@Body() dto: BeneficiariesSignupDto) {
+    const alreadyExists = await this.authService.isAlreadyExits(
       dto.phone,
       dto.email,
     );
-    if (alreadyExits)
-      return {
-        error: 'user already Exits',
-        status: 400,
-      };
-
-    return this.authService.signup(dto);
+    if (alreadyExists) {
+      throw new BadRequestException('User already exists');
+    }
+    return this.authService.beneficiariesSignup(dto);
   }
 
   @Post('refresh')

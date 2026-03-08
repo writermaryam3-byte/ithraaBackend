@@ -7,9 +7,10 @@ import { JwtStrategy } from './strategies/jwt.strategy';
 import { UsersModule } from 'src/users/users.module';
 import { ConfigService } from '@nestjs/config';
 import { SessionModule } from 'src/session/session.module';
+import { SignupStrategyFactory } from './factories/signup.factory';
 
 @Module({
-  providers: [AuthService, JwtStrategy],
+  providers: [AuthService, JwtStrategy, SignupStrategyFactory],
   controllers: [AuthController],
   imports: [
     SessionModule,

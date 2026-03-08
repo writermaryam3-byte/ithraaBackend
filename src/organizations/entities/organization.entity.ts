@@ -16,13 +16,13 @@ export class Organization {
   id: string;
 
   @Column()
-  name: string;
+  organization_name: string;
 
   @Column({
     type: 'enum',
     enum: OrganizationType,
   })
-  type: OrganizationType;
+  organization_type: OrganizationType;
 
   @Column({
     type: 'enum',
