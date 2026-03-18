@@ -7,7 +7,7 @@ import {
 } from 'typeorm';
 import { Child } from './child.entity';
 
-@Entity('child_profiles')
+@Entity('children_profiles')
 export class ChildProfile {
   @PrimaryGeneratedColumn('uuid')
   id: string;

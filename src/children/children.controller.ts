@@ -7,6 +7,8 @@ import {
   Param,
   Delete,
   UseGuards,
+  Query,
+  ParseUUIDPipe,
 } from '@nestjs/common';
 import { ChildrenService } from './children.service';
 import { CreateChildDto } from './dto/create-child.dto';
@@ -33,23 +35,32 @@ export class ChildrenController {
 
   @Roles(UserRole.ADMIN)
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Get()
+  @Get('all')
   findAll() {
     return this.childrenService.findAll();
   }
 
+  @UseGuards(JwtAuthGuard)
+  @Get()
+  findByUser(@Query('userId', new ParseUUIDPipe()) userId: string) {
+    return this.childrenService.findByUser(userId);
+  }
+
+  @UseGuards(JwtAuthGuard)
   @Get(':id')
   findOne(@Param('id') id: string) {
-    return this.childrenService.findOne(+id);
+    return this.childrenService.findOne(id);
   }
 
+  @UseGuards(JwtAuthGuard)
   @Patch(':id')
   update(@Param('id') id: string, @Body() updateChildDto: UpdateChildDto) {
-    return this.childrenService.update(+id, updateChildDto);
+    return this.childrenService.update(id, updateChildDto);
   }
 
+  @UseGuards(JwtAuthGuard)
   @Delete(':id')
   remove(@Param('id') id: string) {
-    return this.childrenService.remove(+id);
+    return this.childrenService.remove(id);
   }
 }

@@ -7,5 +7,5 @@ export class EnrichersSignupDto extends BaseSignupDto {
   organizationName: string;
 
   @IsEnum(AccountType)
-  accountType: AccountType;
+  accountType: AccountType.ENRICHER;
 }

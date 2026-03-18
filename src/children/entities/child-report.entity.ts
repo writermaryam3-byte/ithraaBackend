@@ -7,7 +7,7 @@ import {
   CreateDateColumn,
 } from 'typeorm';
 
-@Entity('reports')
+@Entity('children-reports')
 export class ChildReport {
   @PrimaryGeneratedColumn('uuid')
   id: string;

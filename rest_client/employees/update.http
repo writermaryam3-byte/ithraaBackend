@@ -1,4 +1,4 @@
-POST http://localhost:5000/api/employees
+POST http://localhost:5000/api/employees/
 Content-Type: application/json
 Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJjYWE3N2VmZC1mMWUwLTRkNjItODUzNy0xMWY3YWI1MTA2N2YiLCJlbWFpbCI6InppZnNmZmZhZC50ZWZmZnNmdEBnbWFpbC5jb20iLCJwaG9uZSI6IisyMDEwOTIwODQzNzUiLCJyb2xlIjoiT1JHQU5JWkFUSU9OT1dORVIiLCJpYXQiOjE3NzM0MzQ5ODYsImV4cCI6MTc3NjAyNjk4Nn0.6NpACd9BPeJnTLb4MZItFlR9SV-WnGEkU34ip2XEP5E
 
@@ -6,7 +6,7 @@ Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJjYWE3N2VmZ
     "job_title": "teacher",
     "organization_id": "e5de0d32-285b-4d30-8497-f80a20ea52d4",
     "name": "employee1",
-    "email": "emfltyefe@tesst.com",
+    "email": "emflxyefe@tesst.com",
     "password": "employeeA!#22",
-    "phone": "+201558854455"
+    "phone": "+2f01555854455"
 }

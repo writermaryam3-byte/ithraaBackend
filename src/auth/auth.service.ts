@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
-import * as bcrypt from 'bcrypt';
+import bcrypt from 'bcrypt';
 import { UserRole } from 'src/common/enums/role.enum';
 import { SessionService } from 'src/session/session.service';
 import { User } from 'src/users/entities/user.entity';
@@ -56,11 +56,11 @@ export class AuthService {
     };
 
     const accessToken = this.jwtService.sign(payload, {
-      expiresIn: '15m',
+      expiresIn: '30d',
     });
 
     const refreshToken = this.jwtService.sign(payload, {
-      expiresIn: '7d',
+      expiresIn: '60d',
     });
 
     await this.sessionsService.create({
@@ -70,7 +70,16 @@ export class AuthService {
       refreshToken,
     });
 
-    return { accessToken, refreshToken };
+    return {
+      accessToken,
+      refreshToken,
+      id: user.id,
+      name: user.name,
+      email: user.email,
+      phone: user.phone,
+      role: user.role,
+      expiresIn: '30d',
+    };
   }
 
   async beneficiariesSignup(dto: BeneficiariesSignupDto) {

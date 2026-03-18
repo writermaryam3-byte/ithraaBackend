@@ -1,14 +1,7 @@
-
-POST http://localhost:5000/children
+PATCH http://localhost:5000/children/0cd0ce64-97b4-486e-b1e0-2eee1e6f48d3
 Content-Type: application/json
 Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJlMjM4N2UwOS04ZThmLTQ3NzgtYjE3Ny1lZmE5MjcyZDc5NGUiLCJlbWFpbCI6ImVtcGx5ZWVAdGVzc3QuY29tIiwicGhvbmUiOiIrMjAxMDU4ODU0NDU1Iiwicm9sZSI6ImVtcGxveWVlIiwiaWF0IjoxNzczMTU3ODg0LCJleHAiOjE3NzU3NDk4ODR9.NaIGzQxGR-AhFZ8E1VbzbKHWiaQQH0Iw9udq5iudG3U
 
 {
-    "organization_id": "93c4b384-4f2b-46b1-bafe-b2f560b05bdd",
-    "name": "child1",
-    "user_id": "e2387e09-8e8f-4778-b177-efa9272d794e",
-    "gender": "male",
-    "grade": "grade 1",
-    "birthDate": "2025-12-15"
-
+    "name": "updated child"
 }

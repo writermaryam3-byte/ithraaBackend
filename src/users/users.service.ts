@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, NotFoundException } from '@nestjs/common';
 import { CreateUserDto } from './dto/create-user.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
 import * as bcrypt from 'bcrypt';
@@ -29,7 +29,9 @@ export class UsersService {
   }
 
   async findById(id: string) {
-    return this.userRepo.findOneBy({ id });
+    const user = await this.userRepo.findOneBy({ id });
+    if (!user) throw new NotFoundException('user not found');
+    return user;
   }
   async findByPhone(phone: string) {
     return this.userRepo.findOneBy({ phone });
@@ -42,7 +44,7 @@ export class UsersService {
     return `This action updates a #${id} user`;
   }
 
-  remove(id: number) {
-    return `This action removes a #${id} user`;
+  remove(id: string) {
+    return this.userRepo.delete(id);
   }
 }

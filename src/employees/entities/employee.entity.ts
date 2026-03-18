@@ -14,7 +14,7 @@ export class Employee {
   @PrimaryGeneratedColumn('uuid')
   id: string;
 
-  @OneToOne(() => User)
+  @OneToOne(() => User, { onDelete: 'CASCADE', cascade: true })
   @JoinColumn()
   user: User;
 

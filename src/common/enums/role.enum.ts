@@ -1,8 +1,8 @@
 export enum UserRole {
-  ADMIN = 'admin',
-  ORGANIZATIONOWNER = 'organization_owner',
-  EMPLOYEE = 'employee',
-  ENRICHER = 'enricher',
-  TEACHER = 'teacher',
-  PARENT = 'parent',
+  ADMIN = 'ADMIN',
+  ORGANIZATIONOWNER = 'ORGANIZATIONOWNER',
+  EMPLOYEE = 'EMPLOYEE',
+  ENRICHER = 'ENRICHER',
+  TEACHER = 'TEACHER',
+  PARENT = 'PARENT',
 }

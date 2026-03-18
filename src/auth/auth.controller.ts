@@ -1,14 +1,13 @@
 import {
   BadRequestException,
   Body,
-  ClassSerializerInterceptor,
+  ConflictException,
   Controller,
   Delete,
   Param,
   Post,
   Req,
   UnauthorizedException,
-  UseInterceptors,
 } from '@nestjs/common';
 import { AuthService, TokenPayload } from './auth.service';
 import { LoginDto } from './dto/login.dto';
@@ -18,6 +17,8 @@ import bcrypt from 'bcrypt';
 import { UsersService } from 'src/users/users.service';
 import { BeneficiariesSignupDto } from './dto/beneficiaries/beneficiaries-signup.dto';
 import { EnrichersSignupDto } from './dto/enrichers/enrichers-signup.dto';
+import { Public } from './decorators/public.decorator';
+import { type AuthRequest } from 'src/common/interfaces/auth-request.interface';
 @Controller('auth')
 export class AuthController {
   constructor(
@@ -26,6 +27,7 @@ export class AuthController {
     private readonly sessionsService: SessionService,
     private readonly usersService: UsersService,
   ) {}
+  @Public()
   @Post('login')
   async login(@Body() dto: LoginDto) {
     const user = await this.authService.validateUser(dto.phone, dto.password);
@@ -34,7 +36,7 @@ export class AuthController {
 
     return this.authService.login(user);
   }
-  @UseInterceptors(ClassSerializerInterceptor)
+  @Public()
   @Post('beneficiaries-signup')
   async beneficiariesSiginup(@Body() dto: BeneficiariesSignupDto) {
     const alreadyExists = await this.authService.isAlreadyExits(
@@ -46,7 +48,7 @@ export class AuthController {
     }
     return this.authService.beneficiariesSignup(dto);
   }
-  @UseInterceptors(ClassSerializerInterceptor)
+  @Public()
   @Post('enrichers-signup')
   async enrichersSignup(@Body() dto: EnrichersSignupDto) {
     const alreadyExists = await this.authService.isAlreadyExits(
@@ -54,11 +56,11 @@ export class AuthController {
       dto.email,
     );
     if (alreadyExists) {
-      throw new BadRequestException('User already exists');
+      throw new ConflictException('User already exists');
     }
     return this.authService.enrichersSignup(dto);
   }
-
+  @Public()
   @Post('refresh')
   async refresh(@Body('token') token: string) {
     const payload = this.jwtService.verify<TokenPayload>(token);
@@ -80,15 +82,13 @@ export class AuthController {
 
     return this.authService.login(user);
   }
-
   @Delete('logout/:sessionId')
   async logout(@Param('sessionId') id: string) {
     await this.sessionsService.deleteSession(id);
     return { message: 'Logged out', statusCode: 200 };
   }
-
   @Delete('logout-all')
-  async logoutAll(@Req() req) {
+  async logoutAll(@Req() req: AuthRequest) {
     await this.sessionsService.deleteAllUserSessions(req.user.id);
   }
 }

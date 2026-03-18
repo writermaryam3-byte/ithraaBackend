@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, NotFoundException } from '@nestjs/common';
 import { CreateChildDto } from './dto/create-child.dto';
 import { UpdateChildDto } from './dto/update-child.dto';
 import { Child } from './entities/child.entity';
@@ -13,22 +13,41 @@ export class ChildrenService {
   ) {}
 
   create(createChildDto: CreateChildDto) {
-    return this.childrenRepository.save(createChildDto);
+    return this.childrenRepository.save({
+      ...createChildDto,
+      user: { id: createChildDto.user_id },
+    });
   }
 
-  findAll() {
-    return `This action returns all children`;
+  async findAll() {
+    const [children, count] = await this.childrenRepository.findAndCount();
+
+    return { children, count };
   }
 
-  findOne(id: number) {
-    return `This action returns a #${id} child`;
+  async findByUser(userId: string) {
+    const [children, count] = await this.childrenRepository.findAndCount({
+      where: { user: { id: userId } },
+    });
+    return { children, count };
   }
 
-  update(id: number, updateChildDto: UpdateChildDto) {
-    return `This action updates a #${id} child`;
+  async findOne(id: string) {
+    const child = await this.childrenRepository.findBy({ id });
+    if (!child) throw new NotFoundException('child not found');
+    return child;
   }
 
-  remove(id: number) {
-    return `This action removes a #${id} child`;
+  async update(id: string, updateChildDto: UpdateChildDto) {
+    const child = await this.childrenRepository.preload({
+      id,
+      ...updateChildDto,
+    });
+    if (!child) throw new NotFoundException('child not found');
+    return this.childrenRepository.save(child);
+  }
+
+  remove(id: string) {
+    return this.childrenRepository.delete(id);
   }
 }

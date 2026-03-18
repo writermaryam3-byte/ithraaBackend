@@ -36,9 +36,7 @@ export class EmployeesController {
   findAll() {
     return this.employeesService.findAll();
   }
-
   @Roles(UserRole.ADMIN, UserRole.ORGANIZATIONOWNER)
-  @UseGuards(JwtAuthGuard, RolesGuard)
   @UseInterceptors(ClassSerializerInterceptor)
   @Get('organization/:organizationId')
   findByOrganization(
@@ -57,11 +55,11 @@ export class EmployeesController {
     @Param('id') id: string,
     @Body() updateEmployeeDto: UpdateEmployeeDto,
   ) {
-    return this.employeesService.update(+id, updateEmployeeDto);
+    return this.employeesService.update(id, updateEmployeeDto);
   }
 
   @Delete(':id')
   remove(@Param('id') id: string) {
-    return this.employeesService.remove(+id);
+    return this.employeesService.remove(id);
   }
 }

@@ -9,10 +9,11 @@ import {
   OneToOne,
   CreateDateColumn,
   UpdateDateColumn,
+  JoinColumn,
 } from 'typeorm';
 import { ChildProfile } from './child-profile.entity';
 
-@Entity()
+@Entity('children')
 export class Child {
   @PrimaryGeneratedColumn('uuid')
   id: string;
@@ -30,9 +31,11 @@ export class Child {
   gender: Gender;
 
   @ManyToOne(() => Organization, { nullable: true })
+  @JoinColumn({ name: 'organization_id' })
   organization: Organization;
 
   @ManyToOne(() => User, (user) => user.children)
+  @JoinColumn({ name: 'user_id' })
   user: User;
 
   @OneToOne(() => ChildProfile, (profile) => profile.child)

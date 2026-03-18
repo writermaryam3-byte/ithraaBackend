@@ -1,4 +1,4 @@
-import { Module } from '@nestjs/common';
+import { ClassSerializerInterceptor, Module } from '@nestjs/common';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { ChildrenModule } from './children/children.module';
@@ -11,6 +11,9 @@ import { TestsModule } from './tests/tests.module';
 import { AuthModule } from './auth/auth.module';
 import { ConfigModule } from '@nestjs/config';
 import { SessionModule } from './session/session.module';
+import { APP_GUARD, APP_INTERCEPTOR } from '@nestjs/core';
+import { JwtAuthGuard } from './auth/guards/auth.guard';
+import { RolesGuard } from './auth/guards/roles.guard';
 
 @Module({
   imports: [
@@ -18,14 +21,14 @@ import { SessionModule } from './session/session.module';
     ChildrenModule,
     TypeOrmModule.forRoot({
       type: 'postgres',
-      host: 'localhost',
-      port: 5432,
-      username: 'postgres',
-      password: '112200120',
-      database: 'ithraa',
+      host: process.env.DB_HOST,
+      port: Number(process.env.DB_HOST),
+      username: process.env.DB_USERNAME,
+      password: process.env.DB_PASSWORD,
+      database: process.env.DB_DATABASE,
       // entities: [],
       autoLoadEntities: true,
-      synchronize: true,
+      synchronize: Boolean(process.env.DB_SYNCHRONIZE),
     }),
     UsersModule,
     OrganizationsModule,
@@ -36,6 +39,20 @@ import { SessionModule } from './session/session.module';
     SessionModule,
   ],
   controllers: [AppController],
-  providers: [AppService],
+  providers: [
+    AppService,
+    {
+      provide: APP_GUARD,
+      useClass: JwtAuthGuard,
+    },
+    {
+      provide: APP_GUARD,
+      useClass: RolesGuard,
+    },
+    {
+      provide: APP_INTERCEPTOR,
+      useClass: ClassSerializerInterceptor,
+    },
+  ],
 })
 export class AppModule {}

@@ -24,5 +24,6 @@ import { SignupStrategyFactory } from './factories/signup.factory';
     }),
     UsersModule,
   ],
+  exports: [AuthService],
 })
 export class AuthModule {}
