@@ -28,6 +28,28 @@ export class UsersService {
     return `This action returns all users`;
   }
 
+  async findUsersByRoles() {
+    const users = await this.userRepo.find();
+    const employees = users.filter((user) => user.role === UserRole.EMPLOYEE);
+    const organizationOwners = users.filter(
+      (user) => user.role === UserRole.ORGANIZATIONOWNER,
+    );
+    const enrichers = users.filter((user) => user.role === UserRole.ENRICHER);
+    return {
+      employees,
+      organizationOwners,
+      enrichers,
+    };
+  }
+
+  async getOrganizationOwner(id: string) {
+    const user = await this.userRepo.findOne({
+      where: { id },
+      relations: ['organization'],
+    });
+    return { user };
+  }
+
   async findById(id: string) {
     const user = await this.userRepo.findOneBy({ id });
     if (!user) throw new NotFoundException('user not found');

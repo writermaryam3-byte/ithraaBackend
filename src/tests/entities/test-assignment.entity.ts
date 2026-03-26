@@ -7,10 +7,10 @@ export class TestAssignment {
   @PrimaryGeneratedColumn('uuid')
   id: string;
 
-  @ManyToOne(() => Child)
+  @ManyToOne(() => Child, { onDelete: 'CASCADE' })
   child: Child;
 
-  @ManyToOne(() => Test, (test) => test.assignments)
+  @ManyToOne(() => Test, (test) => test.assignments, { onDelete: 'CASCADE' })
   test: Test;
 
   @Column({ type: 'date' })

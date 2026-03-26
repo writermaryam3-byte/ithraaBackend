@@ -35,8 +35,8 @@ export class User {
   @Column({ type: 'enum', enum: UserRole, default: UserRole.PARENT })
   role: UserRole;
 
-  @OneToMany(() => Organization, (org) => org.owner)
-  organizations: Organization[];
+  @OneToOne(() => Organization, (org) => org.owner)
+  organization: Organization;
 
   @OneToOne(() => Enricher, (enricher) => enricher.user)
   enricher: Enricher;

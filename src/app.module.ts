@@ -14,6 +14,7 @@ import { SessionModule } from './session/session.module';
 import { APP_GUARD, APP_INTERCEPTOR } from '@nestjs/core';
 import { JwtAuthGuard } from './auth/guards/auth.guard';
 import { RolesGuard } from './auth/guards/roles.guard';
+import { UploadsModule } from './uploads/uploads.module';
 
 @Module({
   imports: [
@@ -37,6 +38,7 @@ import { RolesGuard } from './auth/guards/roles.guard';
     TestsModule,
     AuthModule,
     SessionModule,
+    UploadsModule,
   ],
   controllers: [AppController],
   providers: [

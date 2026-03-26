@@ -6,7 +6,7 @@ export class TestResult {
   @PrimaryGeneratedColumn('uuid')
   id: string;
 
-  @ManyToOne(() => TestAssignment)
+  @ManyToOne(() => TestAssignment, { onDelete: 'CASCADE' })
   assignment: TestAssignment;
 
   @Column('float')

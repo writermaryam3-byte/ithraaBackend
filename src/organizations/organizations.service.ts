@@ -16,7 +16,7 @@ export class OrganizationsService {
   }
 
   findAll() {
-    return `This action returns all organizations`;
+    return this.organizationRepository.find();
   }
 
   findOne(id: number) {

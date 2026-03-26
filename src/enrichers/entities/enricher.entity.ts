@@ -13,7 +13,7 @@ export class Enricher {
   @PrimaryGeneratedColumn('uuid')
   id: string;
 
-  @OneToOne(() => User)
+  @OneToOne(() => User, (user) => user.enricher, { onDelete: 'CASCADE' })
   @JoinColumn()
   user: User;
 

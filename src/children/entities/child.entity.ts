@@ -30,11 +30,11 @@ export class Child {
   @Column({ type: 'enum', enum: Gender })
   gender: Gender;
 
-  @ManyToOne(() => Organization, { nullable: true })
+  @ManyToOne(() => Organization, { nullable: true, onDelete: 'CASCADE' })
   @JoinColumn({ name: 'organization_id' })
   organization: Organization;
 
-  @ManyToOne(() => User, (user) => user.children)
+  @ManyToOne(() => User, (user) => user.children, { onDelete: 'CASCADE' })
   @JoinColumn({ name: 'user_id' })
   user: User;
 

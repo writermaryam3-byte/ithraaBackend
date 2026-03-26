@@ -6,8 +6,9 @@ import {
   Entity,
   PrimaryGeneratedColumn,
   Column,
-  ManyToOne,
   OneToMany,
+  OneToOne,
+  JoinColumn,
 } from 'typeorm';
 
 @Entity('organizations')
@@ -31,7 +32,8 @@ export class Organization {
   })
   approval_status: ApprovalStatus;
 
-  @ManyToOne(() => User, (user) => user.organizations)
+  @OneToOne(() => User, (user) => user.organization, { onDelete: 'CASCADE' })
+  @JoinColumn()
   owner: User;
 
   @OneToMany(() => Employee, (emp) => emp.organization)

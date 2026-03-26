@@ -1,0 +1,9 @@
+@baseUrl = http://localhost:5000/api
+@token = eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiI2MDk0OGEzOS01NGQ5LTQyMjAtODdmZS0yODAzOWViZmY2Y2EiLCJlbWFpbCI6ImFkbWluQGFkbWluLmNvbSIsInBob25lIjoiKzIwMTI4MDg0MTA3MCIsInJvbGUiOiJBRE1JTiIsImlhdCI6MTc3MzgzNDUxNiwiZXhwIjoxNzc2NDI2NTE2fQ.xe2dssHXb4cmomgpY7S_XJ4UZzWAREGTJN7zvLXeH24
+
+@organizationOnwerId = 2fa02412-c9a6-45f5-b0ba-905ce75839a8
+
+@organizationId = c164004d-75d8-4249-9168-998f24dc23d5
+
+GET {{baseUrl}}/users/organization-owner/{{organizationOnwerId}}
+Authorization: Bearer {{token}}

@@ -23,3 +23,16 @@ Content-Type: application/json
   "accountType": "organization",
   "organizationName": "enricher"
 }
+
+### enrichers-signup
+POST http://localhost:5000/api/auth/enrichers-signup
+Content-Type: application/json
+
+{
+  "name": "Admin",
+  "email": "Admin@Admin.com",
+  "password": "StrongPass1@",
+  "phone": "+201280841070",
+  "accountType": "organization",
+  "organizationName": "enricher"
+}
