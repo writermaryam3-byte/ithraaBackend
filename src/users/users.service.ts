@@ -29,7 +29,7 @@ export class UsersService {
   }
 
   async findUsersByRoles() {
-    const users = await this.userRepo.find();
+    const users = await this.userRepo.find({ relations: ['enricher'] });
     const employees = users.filter((user) => user.role === UserRole.EMPLOYEE);
     const organizationOwners = users.filter(
       (user) => user.role === UserRole.ORGANIZATIONOWNER,
