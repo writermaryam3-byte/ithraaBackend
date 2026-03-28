@@ -25,15 +25,26 @@ export class User {
   @Column({ unique: true })
   email: string;
 
+  @Column({ default: false })
+  isEmailVerified: boolean;
+
   @Column()
   @Exclude()
   password_hash: string;
 
+  @Column({ default: false })
+  isPhoneVerified: boolean;
+
   @Column({ unique: true })
   phone: string;
 
-  @Column({ type: 'enum', enum: UserRole, default: UserRole.PARENT })
-  role: UserRole;
+  @Column({
+    type: 'enum',
+    enum: UserRole,
+    default: [UserRole.PARENT],
+    array: true,
+  })
+  role: UserRole[];
 
   @OneToOne(() => Organization, (org) => org.owner)
   organization: Organization;

@@ -6,6 +6,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { EntityManager, Repository } from 'typeorm';
 import { User } from './entities/user.entity';
 import { UserRole } from 'src/common/enums/role.enum';
+import { IUserResponseDto } from './dto/user-response.dto';
 
 @Injectable()
 export class UsersService {
@@ -14,7 +15,7 @@ export class UsersService {
     private userRepo: Repository<User>,
   ) {}
 
-  async create(dto: CreateUserDto, role: UserRole, manager: EntityManager) {
+  async create(dto: CreateUserDto, role: UserRole[], manager: EntityManager) {
     const hashed = await bcrypt.hash(dto.password, 10);
     const user = manager.create(User, {
       ...dto,
@@ -24,17 +25,21 @@ export class UsersService {
     return manager.save(user);
   }
 
-  findAll() {
-    return `This action returns all users`;
+  async findAll(): Promise<{ users: IUserResponseDto[] }> {
+    return { users: await this.userRepo.find() };
   }
 
   async findUsersByRoles() {
     const users = await this.userRepo.find({ relations: ['enricher'] });
-    const employees = users.filter((user) => user.role === UserRole.EMPLOYEE);
-    const organizationOwners = users.filter(
-      (user) => user.role === UserRole.ORGANIZATIONOWNER,
+    const employees = users.filter((user) =>
+      user.role.includes(UserRole.EMPLOYEE),
     );
-    const enrichers = users.filter((user) => user.role === UserRole.ENRICHER);
+    const organizationOwners = users.filter((user) =>
+      user.role.includes(UserRole.ORGANIZATIONOWNER),
+    );
+    const enrichers = users.filter((user) =>
+      user.role.includes(UserRole.ENRICHER),
+    );
     return {
       employees,
       organizationOwners,

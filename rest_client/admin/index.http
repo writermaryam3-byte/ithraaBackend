@@ -1,0 +1,5 @@
+@baseUrl = http://localhost:5000/api
+@token = eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiI2MDk0OGEzOS01NGQ5LTQyMjAtODdmZS0yODAzOWViZmY2Y2EiLCJlbWFpbCI6ImFkbWluQGFkbWluLmNvbSIsInBob25lIjoiKzIwMTI4MDg0MTA3MCIsInJvbGUiOiJBRE1JTiIsImlhdCI6MTc3MzgzNDUxNiwiZXhwIjoxNzc2NDI2NTE2fQ.xe2dssHXb4cmomgpY7S_XJ4UZzWAREGTJN7zvLXeH24
+### Get all users in the system
+GET {{baseUrl}}/users
+Authorization: Bearer {{token}}

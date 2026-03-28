@@ -16,7 +16,7 @@ export type TokenPayload = {
   sub: string;
   email: string;
   phone: string;
-  role: UserRole;
+  role: UserRole[];
 };
 
 @Injectable()
@@ -95,7 +95,7 @@ export class AuthService {
               name: dto.name,
               password: dto.password,
             },
-            UserRole.ORGANIZATIONOWNER,
+            [UserRole.ORGANIZATIONOWNER],
             manager,
           );
           await strategy?.saveExtraData(manager, user, dto);
@@ -114,7 +114,7 @@ export class AuthService {
           name: dto.name,
           password: dto.password,
         },
-        UserRole.ENRICHER,
+        [UserRole.ENRICHER],
         manager,
       );
 

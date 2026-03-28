@@ -37,7 +37,7 @@ export class EmployeesService {
           phone: dto.phone,
           password: dto.password,
         },
-        UserRole.EMPLOYEE,
+        [UserRole.EMPLOYEE],
         manager,
       );
 
