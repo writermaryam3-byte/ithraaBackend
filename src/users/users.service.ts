@@ -7,24 +7,47 @@ import { EntityManager, Repository } from 'typeorm';
 import { User } from './entities/user.entity';
 import { UserRole } from 'src/common/enums/role.enum';
 import { IUserResponseDto } from './dto/user-response.dto';
+import { Role } from './entities/user-roles.entity';
 
 @Injectable()
 export class UsersService {
   constructor(
     @InjectRepository(User)
     private userRepo: Repository<User>,
+    @InjectRepository(Role)
+    private roleRepo: Repository<Role>,
   ) {}
 
-  async create(dto: CreateUserDto, role: UserRole[], manager: EntityManager) {
+  onModuleInit() {
+    return this.seedRoles();
+  }
+  async create(dto: CreateUserDto, roles: UserRole[], manager: EntityManager) {
     const hashed = await bcrypt.hash(dto.password, 10);
+    const dbRoles = await this.roleRepo.find({
+      where: roles.map((r) => ({ name: r })),
+    });
     const user = manager.create(User, {
       ...dto,
       password_hash: hashed,
-      role,
+      roles: dbRoles,
     });
     return manager.save(user);
   }
 
+  seedRoles() {
+    const ROLES = [
+      UserRole.ADMIN,
+      UserRole.ORGANIZATIONOWNER,
+      UserRole.EMPLOYEE,
+      UserRole.PARENT,
+      UserRole.TEACHER,
+      UserRole.ENRICHER,
+    ];
+    return this.roleRepo.upsert(
+      ROLES.map((name) => ({ name })),
+      { conflictPaths: ['name'] },
+    );
+  }
   async findAll(): Promise<{ users: IUserResponseDto[] }> {
     return { users: await this.userRepo.find() };
   }
@@ -32,13 +55,13 @@ export class UsersService {
   async findUsersByRoles() {
     const users = await this.userRepo.find({ relations: ['enricher'] });
     const employees = users.filter((user) =>
-      user.role.includes(UserRole.EMPLOYEE),
+      user.roles.some((r) => r.name === UserRole.EMPLOYEE),
     );
     const organizationOwners = users.filter((user) =>
-      user.role.includes(UserRole.ORGANIZATIONOWNER),
+      user.roles.some((r) => r.name === UserRole.ORGANIZATIONOWNER),
     );
     const enrichers = users.filter((user) =>
-      user.role.includes(UserRole.ENRICHER),
+      user.roles.some((r) => r.name === UserRole.ENRICHER),
     );
     return {
       employees,
@@ -67,6 +90,9 @@ export class UsersService {
     return this.userRepo.findOneBy({ email });
   }
 
+  save(user: User) {
+    return this.userRepo.save(user);
+  }
   update(id: number, updateUserDto: UpdateUserDto) {
     return `This action updates a #${id} user`;
   }

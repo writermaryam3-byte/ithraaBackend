@@ -1,0 +1,11 @@
+@baseUrl = http://localhost:5000/api
+@token = eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiI2MDk0OGEzOS01NGQ5LTQyMjAtODdmZS0yODAzOWViZmY2Y2EiLCJlbWFpbCI6ImFkbWluQGFkbWluLmNvbSIsInBob25lIjoiKzIwMTI4MDg0MTA3MCIsInJvbGUiOiJBRE1JTiIsImlhdCI6MTc3MzgzNDUxNiwiZXhwIjoxNzc2NDI2NTE2fQ.xe2dssHXb4cmomgpY7S_XJ4UZzWAREGTJN7zvLXeH24
+### Get all users in the system
+POST {{baseUrl}}/mailer/verfy-email
+Content-Type: application/json
+Authorization: Bearer {{token}}
+
+{
+    "email": "ziadzayd79@gmail.com",
+    "userId": "ae604595-b457-4b78-b159-97f53d6ee132"
+}

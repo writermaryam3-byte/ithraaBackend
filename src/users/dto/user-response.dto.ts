@@ -1,4 +1,4 @@
-import { UserRole } from 'src/common/enums/role.enum';
+import { Role } from '../entities/user-roles.entity';
 
 export interface IUserResponseDto {
   id: string;
@@ -7,5 +7,5 @@ export interface IUserResponseDto {
   isEmailVerified: boolean;
   phone: string;
   isPhoneVerified: boolean;
-  role: UserRole[];
+  roles: Role[];
 }

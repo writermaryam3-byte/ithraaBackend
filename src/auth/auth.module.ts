@@ -8,11 +8,13 @@ import { UsersModule } from 'src/users/users.module';
 import { ConfigService } from '@nestjs/config';
 import { SessionModule } from 'src/session/session.module';
 import { SignupStrategyFactory } from './factories/signup.factory';
+import { MailerModule } from 'src/mailer/mailer.module';
 
 @Module({
   providers: [AuthService, JwtStrategy, SignupStrategyFactory],
   controllers: [AuthController],
   imports: [
+    MailerModule,
     SessionModule,
     PassportModule,
     JwtModule.registerAsync({

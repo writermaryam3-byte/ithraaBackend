@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, NotFoundException } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import bcrypt from 'bcrypt';
 import { UserRole } from 'src/common/enums/role.enum';
@@ -11,12 +11,14 @@ import { SignupStrategyFactory } from './factories/signup.factory';
 import { EnrichersSignupDto } from './dto/enrichers/enrichers-signup.dto';
 import { Enricher } from 'src/enrichers/entities/enricher.entity';
 import { AccountType } from 'src/common/enums/account-type.enum';
+import { MailerService } from 'src/mailer/mailer.service';
+import { Role } from 'src/users/entities/user-roles.entity';
 
 export type TokenPayload = {
   sub: string;
   email: string;
   phone: string;
-  role: UserRole[];
+  roles: Role[];
 };
 
 @Injectable()
@@ -27,7 +29,26 @@ export class AuthService {
     private readonly sessionsService: SessionService,
     private readonly dataSource: DataSource,
     private readonly strategyFactory: SignupStrategyFactory,
+    private readonly mailerService: MailerService,
   ) {}
+
+  async verifyEmail(token: string) {
+    const payload = this.jwtService.verify<{ sub: string; userId: string }>(
+      token,
+    );
+
+    const user = await this.usersService.findById(payload.userId);
+
+    if (!user) {
+      throw new NotFoundException('User not found');
+    }
+
+    user.isEmailVerified = true;
+    await this.usersService.save(user);
+
+    return { message: 'Email verified successfully', ok: true };
+  }
+
   async validateUser(phone: string, pass: string) {
     const user = await this.usersService.findByPhone(phone);
 
@@ -52,7 +73,7 @@ export class AuthService {
       sub: user.id,
       email: user.email,
       phone: user.phone,
-      role: user.role,
+      roles: user.roles,
     };
 
     const accessToken = this.jwtService.sign(payload, {
@@ -77,7 +98,9 @@ export class AuthService {
       name: user.name,
       email: user.email,
       phone: user.phone,
-      role: user.role,
+      roles: user.roles,
+      isEmailVerified: user.isEmailVerified,
+      isPhoneVerified: user.isPhoneVerified,
       expiresIn: '30d',
     };
   }
@@ -99,6 +122,7 @@ export class AuthService {
             manager,
           );
           await strategy?.saveExtraData(manager, user, dto);
+          await this.mailerService.sendVerificationEmail(user.email, user.id);
           return user;
         }
       }
@@ -124,6 +148,8 @@ export class AuthService {
       });
 
       await manager.save(enricher);
+
+      await this.mailerService.sendVerificationEmail(user.email, user.id);
 
       return { user, enricher };
     });

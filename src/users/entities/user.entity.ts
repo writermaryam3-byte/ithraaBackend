@@ -1,6 +1,5 @@
 import { Exclude } from 'class-transformer';
 import { Child } from 'src/children/entities/child.entity';
-import { UserRole } from 'src/common/enums/role.enum';
 import { Employee } from 'src/employees/entities/employee.entity';
 import { Enricher } from 'src/enrichers/entities/enricher.entity';
 import { Organization } from 'src/organizations/entities/organization.entity';
@@ -12,7 +11,10 @@ import {
   CreateDateColumn,
   UpdateDateColumn,
   OneToOne,
+  ManyToMany,
+  JoinTable,
 } from 'typeorm';
+import { Role } from './user-roles.entity';
 
 @Entity('users')
 export class User {
@@ -38,13 +40,9 @@ export class User {
   @Column({ unique: true })
   phone: string;
 
-  @Column({
-    type: 'enum',
-    enum: UserRole,
-    default: [UserRole.PARENT],
-    array: true,
-  })
-  role: UserRole[];
+  @ManyToMany(() => Role, (role) => role.users, { eager: true })
+  @JoinTable()
+  roles: Role[];
 
   @OneToOne(() => Organization, (org) => org.owner)
   organization: Organization;

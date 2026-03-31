@@ -4,8 +4,10 @@ import {
   ConflictException,
   Controller,
   Delete,
+  Get,
   Param,
   Post,
+  Query,
   Req,
   UnauthorizedException,
 } from '@nestjs/common';
@@ -82,6 +84,7 @@ export class AuthController {
 
     return this.authService.login(user);
   }
+
   @Delete('logout/:sessionId')
   async logout(@Param('sessionId') id: string) {
     await this.sessionsService.deleteSession(id);
@@ -90,5 +93,10 @@ export class AuthController {
   @Delete('logout-all')
   async logoutAll(@Req() req: AuthRequest) {
     await this.sessionsService.deleteAllUserSessions(req.user.id);
+  }
+
+  @Get('verify-email')
+  verifyEmail(@Query('token') token: string) {
+    return this.authService.verifyEmail(token);
   }
 }
