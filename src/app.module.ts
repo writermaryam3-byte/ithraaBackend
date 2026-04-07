@@ -8,14 +8,16 @@ import { OrganizationsModule } from './organizations/organizations.module';
 import { EmployeesModule } from './employees/employees.module';
 import { EnrichersModule } from './enrichers/enrichers.module';
 import { TestsModule } from './tests/tests.module';
-import { AuthModule } from './auth/auth.module';
 import { ConfigModule } from '@nestjs/config';
 import { SessionModule } from './session/session.module';
 import { APP_GUARD, APP_INTERCEPTOR } from '@nestjs/core';
-import { JwtAuthGuard } from './auth/guards/auth.guard';
-import { RolesGuard } from './auth/guards/roles.guard';
+
 import { UploadsModule } from './uploads/uploads.module';
 import { MailerModule } from './mailer/mailer.module';
+import { JwtAuthGuard } from './users/guards/auth.guard';
+import { RolesGuard } from './users/guards/roles.guard';
+import { ClassesModule } from './classes/classes.module';
+import { GradesModule } from './grades/grades.module';
 
 @Module({
   imports: [
@@ -37,10 +39,12 @@ import { MailerModule } from './mailer/mailer.module';
     EmployeesModule,
     EnrichersModule,
     TestsModule,
-    AuthModule,
+    // AuthModule,
     SessionModule,
     UploadsModule,
     MailerModule,
+    ClassesModule,
+    GradesModule,
   ],
   controllers: [AppController],
   providers: [

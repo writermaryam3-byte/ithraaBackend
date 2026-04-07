@@ -4,9 +4,9 @@ Content-Type: application/json
 
 {
   "name": "Ziad Zayed",
-  "email": "ziadzayd79@gmail.com",
+  "email": "ziadzeiiayd79@gmail.com",
   "password": "StrongPass1@",
-  "phone": "+201503657687",
+  "phone": "+201543457687",
   "account_type": "organization",
   "organization_name": "org1",
   "organization_type": "nursery"

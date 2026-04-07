@@ -11,20 +11,20 @@ import {
   Req,
   UnauthorizedException,
 } from '@nestjs/common';
-import { AuthService, TokenPayload } from './auth.service';
-import { LoginDto } from './dto/login.dto';
+import { LoginDto } from '../dto/login.dto';
 import { JwtService } from '@nestjs/jwt';
 import { SessionService } from 'src/session/session.service';
 import bcrypt from 'bcrypt';
-import { UsersService } from 'src/users/users.service';
-import { BeneficiariesSignupDto } from './dto/beneficiaries/beneficiaries-signup.dto';
-import { EnrichersSignupDto } from './dto/enrichers/enrichers-signup.dto';
-import { Public } from './decorators/public.decorator';
+import { BeneficiariesSignupDto } from '../dto/beneficiaries/beneficiaries-signup.dto';
+import { EnrichersSignupDto } from '../dto/enrichers/enrichers-signup.dto';
+import { Public } from '../decorators/public.decorator';
 import { type AuthRequest } from 'src/common/interfaces/auth-request.interface';
+import { AuthProvider, TokenPayload } from '../services/auth.provider';
+import { UsersService } from '../services/users.service';
 @Controller('auth')
 export class AuthController {
   constructor(
-    private readonly authService: AuthService,
+    private readonly authService: AuthProvider,
     private readonly jwtService: JwtService,
     private readonly sessionsService: SessionService,
     private readonly usersService: UsersService,

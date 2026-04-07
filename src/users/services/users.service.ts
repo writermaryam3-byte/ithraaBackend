@@ -1,13 +1,12 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
-import { CreateUserDto } from './dto/create-user.dto';
-import { UpdateUserDto } from './dto/update-user.dto';
 import * as bcrypt from 'bcrypt';
 import { InjectRepository } from '@nestjs/typeorm';
 import { EntityManager, Repository } from 'typeorm';
-import { User } from './entities/user.entity';
 import { UserRole } from 'src/common/enums/role.enum';
-import { IUserResponseDto } from './dto/user-response.dto';
-import { Role } from './entities/user-roles.entity';
+import { CreateUserDto } from '../dto/create-user.dto';
+import { IUserResponseDto } from '../dto/user-response.dto';
+import { Role } from '../entities/user-roles.entity';
+import { User } from '../entities/user.entity';
 
 @Injectable()
 export class UsersService {
@@ -93,11 +92,14 @@ export class UsersService {
   save(user: User) {
     return this.userRepo.save(user);
   }
-  update(id: number, updateUserDto: UpdateUserDto) {
-    return `This action updates a #${id} user`;
-  }
 
-  remove(id: string) {
-    return this.userRepo.delete(id);
+  async remove(id: string) {
+    const result = await this.userRepo.delete({ id });
+
+    if (result.affected === 0) {
+      throw new NotFoundException('user not found');
+    }
+
+    return { message: 'Deleted successfully' };
   }
 }

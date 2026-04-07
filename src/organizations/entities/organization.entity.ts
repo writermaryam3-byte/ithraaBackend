@@ -1,6 +1,7 @@
 import { ApprovalStatus } from 'src/common/enums/approval-status.enum';
 import { OrganizationType } from 'src/common/enums/organization-type.enum';
 import { Employee } from 'src/employees/entities/employee.entity';
+import { Grade } from 'src/grades/entities/grade.entity';
 import { User } from 'src/users/entities/user.entity';
 import {
   Entity,
@@ -38,4 +39,7 @@ export class Organization {
 
   @OneToMany(() => Employee, (emp) => emp.organization)
   employees: Employee[];
+
+  @OneToMany(() => Grade, (grade) => grade.organization)
+  grades: Grade[];
 }

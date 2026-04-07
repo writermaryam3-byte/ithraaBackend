@@ -6,19 +6,19 @@ import {
 import { CreateEmployeeDto } from './dto/create-employee.dto';
 import { UpdateEmployeeDto } from './dto/update-employee.dto';
 import { DataSource, Repository } from 'typeorm';
-import { UsersService } from 'src/users/users.service';
 import { UserRole } from 'src/common/enums/role.enum';
 import { Employee } from './entities/employee.entity';
 import { InjectRepository } from '@nestjs/typeorm';
-import { AuthService } from 'src/auth/auth.service';
 import { User } from 'src/users/entities/user.entity';
+import { AuthProvider } from 'src/users/services/auth.provider';
+import { UsersService } from 'src/users/services/users.service';
 
 @Injectable()
 export class EmployeesService {
   constructor(
     private readonly dataSource: DataSource,
     private readonly usersService: UsersService,
-    private readonly authService: AuthService,
+    private readonly authService: AuthProvider,
     @InjectRepository(Employee)
     private employeeRepo: Repository<Employee>,
   ) {}

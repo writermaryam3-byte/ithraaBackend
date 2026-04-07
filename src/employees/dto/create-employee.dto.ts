@@ -1,5 +1,5 @@
 import { IsUUID, IsString, Length } from 'class-validator';
-import { BaseSignupDto } from 'src/auth/dto/base-signup.dto';
+import { BaseSignupDto } from 'src/users/dto/base-signup.dto';
 
 export class CreateEmployeeDto extends BaseSignupDto {
   @IsString()

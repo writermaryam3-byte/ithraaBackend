@@ -1,20 +1,16 @@
-import {
-  Controller,
-  Get,
-  Body,
-  Patch,
-  Param,
-  Delete,
-  Post,
-} from '@nestjs/common';
-import { UsersService } from './users.service';
-import { UpdateUserDto } from './dto/update-user.dto';
-import { Roles } from 'src/auth/decorators/role.decorator';
+import { Controller, Get, Body, Param, Delete, Post } from '@nestjs/common';
 import { UserRole } from 'src/common/enums/role.enum';
+import { CreateTeacherDto } from '../dto/create-teacher.dto';
+import { TeachersProvider } from '../services/teachers.provider';
+import { Roles } from '../decorators/role.decorator';
+import { UsersService } from '../services/users.service';
 
 @Controller('users')
 export class UsersController {
-  constructor(private readonly usersService: UsersService) {}
+  constructor(
+    private readonly usersService: UsersService,
+    private readonly teachersProvider: TeachersProvider,
+  ) {}
 
   // @Post()
   // create(@Body() createUserDto: CreateUserDto) {
@@ -49,13 +45,13 @@ export class UsersController {
     return this.usersService.findById(id);
   }
 
-  @Patch(':id')
-  update(@Param('id') id: string, @Body() updateUserDto: UpdateUserDto) {
-    return this.usersService.update(+id, updateUserDto);
-  }
-
   @Delete(':id')
   remove(@Param('id') id: string) {
     return this.usersService.remove(id);
+  }
+
+  @Post('teachers')
+  createTeacher(@Body() createTeacherDto: CreateTeacherDto) {
+    return this.teachersProvider.create(createTeacherDto);
   }
 }

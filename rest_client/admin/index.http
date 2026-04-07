@@ -1,4 +1,4 @@
-@baseUrl = http://localhost:5000/api
+@baseUrl = https://ithraabackend-production.up.railway.app/api
 @token = eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJhZTYwNDU5NS1iNDU3LTRiNzgtYjE1OS05N2Y1M2Q2ZWUxMzIiLCJlbWFpbCI6InppYWR6YXlkNzlAZ21haWwuY29tIiwicGhvbmUiOiIrMjAxNTAzNjU3Njg3Iiwicm9sZXMiOlt7ImlkIjoiNTc0NmNkNDItNGJkZS00OWQxLWFjMmQtNjViYTA3YWYxODk3IiwibmFtZSI6IkFETUlOIn0seyJpZCI6ImFmNzJlYjVjLTU4NmQtNDI4Mi04NmYwLTVhYmQyNTA5NjI1NSIsIm5hbWUiOiJPUkdBTklaQVRJT05PV05FUiJ9XSwiaWF0IjoxNzc0Nzc4NDgxLCJleHAiOjE3NzczNzA0ODF9.-3thFsF1Wu6TgdaGa9KspEOLirq1TsWZ0mY5GmM2VZ0
 ### Get all users in the system
 GET {{baseUrl}}/users
@@ -7,4 +7,13 @@ Authorization: Bearer {{token}}
 
 ### Seed roles
 POST {{baseUrl}}/users/seed-roles
+Authorization: Bearer {{token}}
+
+### get Grades
+GET {{baseUrl}}/grades
+Authorization: Bearer {{token}}
+
+
+### get classes
+GET {{baseUrl}}/classes
 Authorization: Bearer {{token}}

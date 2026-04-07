@@ -14,8 +14,8 @@ import {
   SubmitTestDto,
 } from './dto/create-test.dto';
 import { UpdateTestDto } from './dto/update-test.dto';
-import { Roles } from 'src/auth/decorators/role.decorator';
 import { UserRole } from 'src/common/enums/role.enum';
+import { Roles } from 'src/users/decorators/role.decorator';
 
 @Controller('tests')
 export class TestsController {

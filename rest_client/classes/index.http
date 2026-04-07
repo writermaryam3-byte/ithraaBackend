@@ -1,0 +1,20 @@
+@baseUrl = http://localhost:5000/api
+@token = eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJhZTYwNDU5NS1iNDU3LTRiNzgtYjE1OS05N2Y1M2Q2ZWUxMzIiLCJlbWFpbCI6InppYWR6YXlkNzlAZ21haWwuY29tIiwicGhvbmUiOiIrMjAxNTAzNjU3Njg3Iiwicm9sZXMiOlt7ImlkIjoiNTc0NmNkNDItNGJkZS00OWQxLWFjMmQtNjViYTA3YWYxODk3IiwibmFtZSI6IkFETUlOIn0seyJpZCI6ImFmNzJlYjVjLTU4NmQtNDI4Mi04NmYwLTVhYmQyNTA5NjI1NSIsIm5hbWUiOiJPUkdBTklaQVRJT05PV05FUiJ9XSwiaWF0IjoxNzc1Mzg3MDI4LCJleHAiOjE3Nzc5NzkwMjh9.1kZIJ7CM2LNd9oBZ7qEkRF8jn4YHHetNXS_WJC4SiR4
+
+@grade = f120dbc5-4fab-480c-af01-eac3b3942fc6
+
+@clsId = 44045a78-18b8-4b41-9959-287243a00be1
+
+### Create Class organization owner
+POST {{baseUrl}}/classes HTTP/1.1
+Content-Type: application/json
+Authorization: Bearer {{token}}
+
+{
+    "name": "class-1",
+    "gradeId": "{{grade}}"
+}
+
+### get one class
+GET {{baseUrl}}/classes/{{clsId}}
+Authorization: Bearer {{token}}

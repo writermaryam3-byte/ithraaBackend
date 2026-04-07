@@ -1,0 +1,14 @@
+@baseUrl = http://localhost:5000/api
+
+### login org owner
+@name = loginOrgOwner
+POST http:/{{baseUrl}}/auth/login
+Content-Type: application/json
+
+{
+  "password": "StrongPass1@",
+  "phone": "+201503657687"
+}
+
+###
+@token = {{loginOrgOwner.response.body.accessToken}}

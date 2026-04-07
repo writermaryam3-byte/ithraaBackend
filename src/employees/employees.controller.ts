@@ -11,8 +11,8 @@ import {
 import { EmployeesService } from './employees.service';
 import { CreateEmployeeDto } from './dto/create-employee.dto';
 import { UpdateEmployeeDto } from './dto/update-employee.dto';
-import { Roles } from 'src/auth/decorators/role.decorator';
 import { UserRole } from 'src/common/enums/role.enum';
+import { Roles } from 'src/users/decorators/role.decorator';
 
 @Controller('employees')
 export class EmployeesController {
