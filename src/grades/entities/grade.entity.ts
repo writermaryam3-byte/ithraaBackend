@@ -9,7 +9,7 @@ import {
   Entity,
 } from 'typeorm';
 
-@Entity()
+@Entity('grades')
 export class Grade {
   @PrimaryGeneratedColumn('uuid')
   id: string;

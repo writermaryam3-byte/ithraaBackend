@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, NotFoundException } from '@nestjs/common';
 import { CreateOrganizationDto } from './dto/create-organization.dto';
 import { UpdateOrganizationDto } from './dto/update-organization.dto';
 import { Organization } from './entities/organization.entity';
@@ -21,6 +21,12 @@ export class OrganizationsService {
 
   findOne(id: number) {
     return `This action returns a #${id} organization`;
+  }
+
+  async findOneOrFail(id: string) {
+    const org = await this.organizationRepository.findOneBy({ id });
+    if (!org) throw new NotFoundException('organization not found');
+    return org;
   }
 
   findByOwner(ownerId: string) {

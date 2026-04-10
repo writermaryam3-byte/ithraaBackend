@@ -1,7 +1,6 @@
 import { Exclude } from 'class-transformer';
 import { Child } from 'src/children/entities/child.entity';
 import { Employee } from 'src/employees/entities/employee.entity';
-import { Enricher } from 'src/enrichers/entities/enricher.entity';
 import { Organization } from 'src/organizations/entities/organization.entity';
 import {
   Entity,
@@ -15,6 +14,7 @@ import {
   JoinTable,
 } from 'typeorm';
 import { Role } from './user-roles.entity';
+import { Enricher } from './enricher.entity';
 
 @Entity('users')
 export class User {
@@ -55,6 +55,9 @@ export class User {
 
   @OneToMany(() => Child, (child) => child.user)
   children: Child[];
+
+  @OneToMany(() => Child, (child) => child.parent)
+  parentChildren: Child[];
 
   @CreateDateColumn()
   created_at: Date;

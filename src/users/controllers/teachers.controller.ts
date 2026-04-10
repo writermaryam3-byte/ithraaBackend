@@ -1,4 +1,12 @@
-import { Body, Controller, Delete, Param, Patch, Post } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Delete,
+  Param,
+  ParseUUIDPipe,
+  Patch,
+  Post,
+} from '@nestjs/common';
 import {
   ApiBearerAuth,
   ApiOperation,
@@ -30,13 +38,16 @@ export class TeachersController {
 
   @ApiOperation({ summary: 'Update a class' })
   @Patch(':id')
-  update(@Param('id') id: string, @Body() updateClassDto: UpdateClassDto) {
+  update(
+    @Param('id', new ParseUUIDPipe()) id: string,
+    @Body() updateClassDto: UpdateClassDto,
+  ) {
     return this.teachersServieces.update(id, updateClassDto);
   }
 
   @ApiOperation({ summary: 'Delete a class' })
   @Delete(':id')
-  remove(@Param('id') id: string) {
+  remove(@Param('id', new ParseUUIDPipe()) id: string) {
     return this.usersServices.remove(id);
   }
 }

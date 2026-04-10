@@ -7,6 +7,7 @@ import { Repository } from 'typeorm';
 import { AdminClassResponse } from './dto/admin-class-response.dto';
 import { GradesService } from 'src/grades/grades.service';
 import { OrgOwnerClassResponse } from './dto/orgOwner-class-response.dto';
+import { ChildrenService } from 'src/children/children.service';
 
 @Injectable()
 export class ClassesService {
@@ -14,6 +15,7 @@ export class ClassesService {
     @InjectRepository(Class)
     private readonly classesRepo: Repository<Class>,
     private readonly gradesService: GradesService,
+    private readonly childrenService: ChildrenService,
   ) {}
   async create(createClassDto: CreateClassDto) {
     const grade = await this.gradesService.findOne(createClassDto.gradeId);
@@ -32,6 +34,7 @@ export class ClassesService {
     return classes.map((cls) => ({
       id: cls.id,
       gradeName: cls.grade.name,
+      children: cls.children,
       name: cls.name,
       organizationName: cls.grade.organization.organization_name,
     }));
@@ -40,13 +43,14 @@ export class ClassesService {
   async findOne(id: string): Promise<OrgOwnerClassResponse> {
     const cls = await this.classesRepo.findOne({
       where: { id },
-      relations: ['grade'],
+      relations: ['grade', 'children'],
     });
     if (!cls) throw new NotFoundException(`class with ID ${id} not found`);
     return {
       gradeName: cls.grade.name,
       id: cls.id,
       name: cls.name,
+      children: cls.children,
     };
   }
   async findOneOrFail(id: string) {
@@ -77,5 +81,18 @@ export class ClassesService {
     }
 
     return { message: 'Deleted successfully' };
+  }
+
+  async asignChild(childId: string, clsId: string) {
+    const child = await this.childrenService.findOneOrFail(childId);
+    const cls = await this.findOneOrFail(clsId);
+    child.class = cls;
+    await this.childrenService.save(child);
+    return { message: 'child asigned successfully' };
+  }
+
+  async getChildrenInClass(clsId: string) {
+    const cls = await this.findOne(clsId);
+    return cls.children;
   }
 }

@@ -1,7 +1,14 @@
+import { Child } from 'src/children/entities/child.entity';
 import { Grade } from 'src/grades/entities/grade.entity';
-import { PrimaryGeneratedColumn, Column, ManyToOne, Entity } from 'typeorm';
+import {
+  PrimaryGeneratedColumn,
+  Column,
+  ManyToOne,
+  Entity,
+  OneToMany,
+} from 'typeorm';
 
-@Entity()
+@Entity('classes')
 export class Class {
   @PrimaryGeneratedColumn('uuid')
   id: string;
@@ -11,4 +18,7 @@ export class Class {
 
   @ManyToOne(() => Grade, (grade) => grade.classes, { onDelete: 'CASCADE' })
   grade: Grade;
+
+  @OneToMany(() => Child, (child) => child.class)
+  children: Child[];
 }

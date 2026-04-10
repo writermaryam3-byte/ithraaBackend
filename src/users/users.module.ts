@@ -16,18 +16,31 @@ import { MailerModule } from 'src/mailer/mailer.module';
 import { SessionModule } from 'src/session/session.module';
 import { UsersService } from './services/users.service';
 import { TeachersController } from './controllers/teachers.controller';
+import { ParentsController } from './controllers/parent.controller';
+import { ParentsServices } from './services/parents.service';
+import { EnrichersService } from './services/enrichers.service';
+import { Enricher } from './entities/enricher.entity';
+import { EnrichersController } from './controllers/enrichers.controller';
 
 @Module({
-  controllers: [UsersController, AuthController, TeachersController],
+  controllers: [
+    UsersController,
+    AuthController,
+    TeachersController,
+    ParentsController,
+    EnrichersController,
+  ],
   providers: [
     UsersService,
     TeachersProvider,
     AuthProvider,
     JwtStrategy,
     SignupStrategyFactory,
+    ParentsServices,
+    EnrichersService,
   ],
   imports: [
-    TypeOrmModule.forFeature([User, Role, Teacher]),
+    TypeOrmModule.forFeature([User, Role, Teacher, Enricher]),
     MailerModule,
     SessionModule,
     PassportModule,
@@ -39,6 +52,6 @@ import { TeachersController } from './controllers/teachers.controller';
       }),
     }),
   ],
-  exports: [TypeOrmModule, UsersService, AuthProvider],
+  exports: [TypeOrmModule, UsersService, AuthProvider, EnrichersService],
 })
 export class UsersModule {}

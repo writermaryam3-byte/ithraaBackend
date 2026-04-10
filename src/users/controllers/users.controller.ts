@@ -1,10 +1,20 @@
-import { Controller, Get, Body, Param, Delete, Post } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Body,
+  Param,
+  Delete,
+  Post,
+  ParseUUIDPipe,
+} from '@nestjs/common';
 import { UserRole } from 'src/common/enums/role.enum';
 import { CreateTeacherDto } from '../dto/create-teacher.dto';
 import { TeachersProvider } from '../services/teachers.provider';
 import { Roles } from '../decorators/role.decorator';
 import { UsersService } from '../services/users.service';
-
+import { ApiTags, ApiBearerAuth } from '@nestjs/swagger';
+@ApiTags('users')
+@ApiBearerAuth()
 @Controller('users')
 export class UsersController {
   constructor(
@@ -36,17 +46,17 @@ export class UsersController {
 
   @Roles(UserRole.ORGANIZATIONOWNER, UserRole.ADMIN)
   @Get('organization-owner/:id')
-  getOrganizationOwner(@Param('id') id: string) {
+  getOrganizationOwner(@Param('id', new ParseUUIDPipe()) id: string) {
     return this.usersService.getOrganizationOwner(id);
   }
 
   @Get(':id')
-  findOne(@Param('id') id: string) {
+  findOne(@Param('id', new ParseUUIDPipe()) id: string) {
     return this.usersService.findById(id);
   }
 
   @Delete(':id')
-  remove(@Param('id') id: string) {
+  remove(@Param('id', new ParseUUIDPipe()) id: string) {
     return this.usersService.remove(id);
   }
 

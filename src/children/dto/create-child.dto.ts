@@ -4,27 +4,62 @@ import {
   IsDateString,
   IsEnum,
   IsUUID,
+  IsNotEmptyObject,
 } from 'class-validator';
 import { Gender } from 'src/common/enums/gender.enum';
+import { BaseSignupDto } from 'src/users/dto/base-signup.dto';
+import { Type } from 'class-transformer';
+import { ValidateNested } from 'class-validator';
+import { ApiProperty } from '@nestjs/swagger';
 
 export class CreateChildDto {
+  @ApiProperty({
+    example: 'child-name',
+  })
   @IsString()
   name: string;
 
-  @IsOptional()
-  @IsString()
-  grade?: string;
-
+  @ApiProperty({
+    example: '28-2-2007',
+    format: 'date',
+  })
   @IsDateString()
   birthDate: Date;
 
+  @ApiProperty({
+    example: Gender.MALE,
+  })
   @IsEnum(Gender)
   gender: Gender;
 
+  @ApiProperty({
+    description: 'organization ID',
+    example: '0a7d391a-a4e5-4716-89c3-158a97919c89',
+    format: 'uuid',
+  })
   @IsOptional()
   @IsUUID()
   organization_id?: string;
 
+  @ApiProperty({
+    description: 'user ID',
+    example: '44304606-b3f1-49a9-b739-b9e91537b7f3',
+    format: 'uuid',
+  })
   @IsUUID()
   user_id: string;
+}
+
+export class CreateChildWithParentDto {
+  @ApiProperty({ type: CreateChildDto })
+  @IsNotEmptyObject()
+  @ValidateNested()
+  @Type(() => CreateChildDto)
+  child: CreateChildDto;
+
+  @ApiProperty({ type: BaseSignupDto })
+  @IsNotEmptyObject()
+  @ValidateNested()
+  @Type(() => BaseSignupDto)
+  parent: BaseSignupDto;
 }

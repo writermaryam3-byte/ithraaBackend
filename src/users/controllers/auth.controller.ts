@@ -6,6 +6,7 @@ import {
   Delete,
   Get,
   Param,
+  ParseUUIDPipe,
   Post,
   Query,
   Req,
@@ -21,6 +22,9 @@ import { Public } from '../decorators/public.decorator';
 import { type AuthRequest } from 'src/common/interfaces/auth-request.interface';
 import { AuthProvider, TokenPayload } from '../services/auth.provider';
 import { UsersService } from '../services/users.service';
+import { ApiTags, ApiBearerAuth } from '@nestjs/swagger';
+@ApiTags('auth')
+@ApiBearerAuth()
 @Controller('auth')
 export class AuthController {
   constructor(
@@ -86,7 +90,7 @@ export class AuthController {
   }
 
   @Delete('logout/:sessionId')
-  async logout(@Param('sessionId') id: string) {
+  async logout(@Param('sessionId', new ParseUUIDPipe()) id: string) {
     await this.sessionsService.deleteSession(id);
     return { message: 'Logged out', statusCode: 200 };
   }

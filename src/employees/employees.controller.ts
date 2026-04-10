@@ -13,10 +13,20 @@ import { CreateEmployeeDto } from './dto/create-employee.dto';
 import { UpdateEmployeeDto } from './dto/update-employee.dto';
 import { UserRole } from 'src/common/enums/role.enum';
 import { Roles } from 'src/users/decorators/role.decorator';
-
+import {
+  ApiBearerAuth,
+  ApiOperation,
+  ApiResponse,
+  ApiTags,
+} from '@nestjs/swagger';
+@ApiTags('employees')
+@ApiBearerAuth()
 @Controller('employees')
 export class EmployeesController {
   constructor(private readonly employeesService: EmployeesService) {}
+
+  @ApiOperation({ summary: 'Create new employee' })
+  @ApiResponse({ status: 201, description: 'employee created successfully' })
   @Roles(UserRole.ORGANIZATIONOWNER)
   @Post()
   create(@Body() createEmployeeDto: CreateEmployeeDto) {
@@ -43,14 +53,14 @@ export class EmployeesController {
 
   @Patch(':id')
   update(
-    @Param('id') id: string,
+    @Param('id', new ParseUUIDPipe()) id: string,
     @Body() updateEmployeeDto: UpdateEmployeeDto,
   ) {
     return this.employeesService.update(id, updateEmployeeDto);
   }
 
   @Delete(':id')
-  remove(@Param('id') id: string) {
+  remove(@Param('id', new ParseUUIDPipe()) id: string) {
     return this.employeesService.remove(id);
   }
 }

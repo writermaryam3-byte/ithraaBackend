@@ -5,7 +5,6 @@ import { UserRole } from 'src/common/enums/role.enum';
 import { SessionService } from 'src/session/session.service';
 import { User } from 'src/users/entities/user.entity';
 import { DataSource } from 'typeorm';
-import { Enricher } from 'src/enrichers/entities/enricher.entity';
 import { AccountType } from 'src/common/enums/account-type.enum';
 import { MailerService } from 'src/mailer/mailer.service';
 import { Role } from 'src/users/entities/user-roles.entity';
@@ -13,6 +12,7 @@ import { SignupStrategyFactory } from '../factories/signup.factory';
 import { BeneficiariesSignupDto } from '../dto/beneficiaries/beneficiaries-signup.dto';
 import { EnrichersSignupDto } from '../dto/enrichers/enrichers-signup.dto';
 import { UsersService } from './users.service';
+import { Enricher } from '../entities/enricher.entity';
 
 export type TokenPayload = {
   sub: string;

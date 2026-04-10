@@ -5,12 +5,14 @@ import {
   Body,
   // Patch,
   Param,
+  ParseUUIDPipe,
   // Delete,
 } from '@nestjs/common';
 import { SessionService } from './session.service';
 import { CreateSessionDto } from './dto/create-session.dto';
-import { UpdateSessionDto } from './dto/update-session.dto';
-
+import { ApiTags, ApiBearerAuth } from '@nestjs/swagger';
+@ApiTags('sessions')
+@ApiBearerAuth()
 @Controller('session')
 export class SessionController {
   constructor(private readonly sessionService: SessionService) {}
@@ -26,7 +28,7 @@ export class SessionController {
   }
 
   @Get(':id')
-  findOne(@Param('id') id: string) {
+  findOne(@Param('id', new ParseUUIDPipe()) id: string) {
     return this.sessionService.findOne(+id);
   }
 

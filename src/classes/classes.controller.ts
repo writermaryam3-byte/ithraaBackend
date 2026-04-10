@@ -6,6 +6,7 @@ import {
   Patch,
   Param,
   Delete,
+  ParseUUIDPipe,
 } from '@nestjs/common';
 import { ClassesService } from './classes.service';
 import { CreateClassDto } from './dto/create-class.dto';
@@ -40,22 +41,40 @@ export class ClassesController {
     return this.classesService.findAll();
   }
 
+  @ApiOperation({ summary: 'Get all children in class' })
+  @Get(':id/get-children')
+  getChildrenInClass(@Param('id', new ParseUUIDPipe()) id: string) {
+    return this.classesService.getChildrenInClass(id);
+  }
+
   @ApiOperation({ summary: 'Get one class' })
   @Roles(UserRole.ADMIN, UserRole.ORGANIZATIONOWNER)
   @Get(':id')
-  findOne(@Param('id') id: string) {
+  findOne(@Param('id', new ParseUUIDPipe()) id: string) {
     return this.classesService.findOne(id);
   }
 
   @ApiOperation({ summary: 'Update a class' })
   @Patch(':id')
-  update(@Param('id') id: string, @Body() updateClassDto: UpdateClassDto) {
+  update(
+    @Param('id', new ParseUUIDPipe()) id: string,
+    @Body() updateClassDto: UpdateClassDto,
+  ) {
     return this.classesService.update(id, updateClassDto);
   }
 
   @ApiOperation({ summary: 'Delete a class' })
   @Delete(':id')
-  remove(@Param('id') id: string) {
+  remove(@Param('id', new ParseUUIDPipe()) id: string) {
     return this.classesService.remove(id);
+  }
+
+  @ApiOperation({ summary: 'asign child to class' })
+  @Post(':clsId/asign/:childId')
+  asignChild(
+    @Param('childId', new ParseUUIDPipe()) childId: string,
+    @Param('clsId', new ParseUUIDPipe()) clsId: string,
+  ) {
+    return this.classesService.asignChild(childId, clsId);
   }
 }

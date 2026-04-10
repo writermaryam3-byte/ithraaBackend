@@ -6,7 +6,6 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { UsersModule } from './users/users.module';
 import { OrganizationsModule } from './organizations/organizations.module';
 import { EmployeesModule } from './employees/employees.module';
-import { EnrichersModule } from './enrichers/enrichers.module';
 import { TestsModule } from './tests/tests.module';
 import { ConfigModule } from '@nestjs/config';
 import { SessionModule } from './session/session.module';
@@ -37,7 +36,6 @@ import { GradesModule } from './grades/grades.module';
     UsersModule,
     OrganizationsModule,
     EmployeesModule,
-    EnrichersModule,
     TestsModule,
     // AuthModule,
     SessionModule,

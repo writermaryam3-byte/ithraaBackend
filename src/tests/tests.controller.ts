@@ -6,6 +6,7 @@ import {
   Patch,
   Param,
   Delete,
+  ParseUUIDPipe,
 } from '@nestjs/common';
 import { TestsService } from './tests.service';
 import {
@@ -16,7 +17,9 @@ import {
 import { UpdateTestDto } from './dto/update-test.dto';
 import { UserRole } from 'src/common/enums/role.enum';
 import { Roles } from 'src/users/decorators/role.decorator';
-
+import { ApiTags, ApiBearerAuth } from '@nestjs/swagger';
+@ApiTags('tests')
+@ApiBearerAuth()
 @Controller('tests')
 export class TestsController {
   constructor(private readonly testsService: TestsService) {}
@@ -48,19 +51,22 @@ export class TestsController {
   }
 
   @Get(':id')
-  findOne(@Param('id') id: string) {
+  findOne(@Param('id', new ParseUUIDPipe()) id: string) {
     return this.testsService.findOne(id);
   }
 
   @Roles(UserRole.ADMIN)
   @Patch(':id')
-  update(@Param('id') id: string, @Body() updateTestDto: UpdateTestDto) {
+  update(
+    @Param('id', new ParseUUIDPipe()) id: string,
+    @Body() updateTestDto: UpdateTestDto,
+  ) {
     return this.testsService.update(+id, updateTestDto);
   }
 
   @Roles(UserRole.ADMIN)
   @Delete(':id')
-  remove(@Param('id') id: string) {
+  remove(@Param('id', new ParseUUIDPipe()) id: string) {
     return this.testsService.remove(+id);
   }
 }

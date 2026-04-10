@@ -12,6 +12,7 @@ import {
   JoinColumn,
 } from 'typeorm';
 import { ChildProfile } from './child-profile.entity';
+import { Class } from 'src/classes/entities/class.entity';
 
 @Entity('children')
 export class Child {
@@ -21,9 +22,6 @@ export class Child {
   @Column()
   name: string;
 
-  @Column({ nullable: true })
-  grade: string;
-
   @Column({ type: 'date' })
   birthDate: Date;
 
@@ -32,11 +30,22 @@ export class Child {
 
   @ManyToOne(() => Organization, { nullable: true, onDelete: 'CASCADE' })
   @JoinColumn({ name: 'organization_id' })
-  organization: Organization;
+  organization: Organization | null;
+
+  @ManyToOne(() => Class, (cls) => cls.children, {
+    nullable: true,
+    onDelete: 'CASCADE',
+  })
+  @JoinColumn({ name: 'classId' })
+  class: Class;
 
   @ManyToOne(() => User, (user) => user.children, { onDelete: 'CASCADE' })
   @JoinColumn({ name: 'user_id' })
   user: User;
+
+  @ManyToOne(() => User, (user) => user.children, { onDelete: 'CASCADE' })
+  @JoinColumn({ name: 'parentId' })
+  parent: User;
 
   @OneToOne(() => ChildProfile, (profile) => profile.child)
   profile: ChildProfile;

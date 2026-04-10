@@ -2,9 +2,32 @@ import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module';
 import { BadRequestException, ValidationPipe } from '@nestjs/common';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
+import type { ValidationError } from 'class-validator';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
+
+  const flattenValidationErrors = (
+    errors: ValidationError[],
+    parentPath = '',
+    out: Record<string, string> = {},
+  ) => {
+    for (const err of errors) {
+      const path = parentPath ? `${parentPath}.${err.property}` : err.property;
+
+      const constraints = Object.values(err.constraints ?? {});
+      if (constraints.length > 0) {
+        // Keep the first message for each field (consistent with previous behavior)
+        out[path] = constraints[0];
+      }
+
+      if (err.children && err.children.length > 0) {
+        flattenValidationErrors(err.children, path, out);
+      }
+    }
+
+    return out;
+  };
 
   app.useGlobalPipes(
     new ValidationPipe({
@@ -12,14 +35,7 @@ async function bootstrap() {
       forbidNonWhitelisted: true,
       transform: true,
       exceptionFactory: (errors) => {
-        const formattedErrors = {};
-
-        errors.forEach((err) => {
-          const constraints = Object.values(err.constraints || {});
-          formattedErrors[err.property] = constraints[0];
-        });
-
-        return new BadRequestException(formattedErrors);
+        return new BadRequestException(flattenValidationErrors(errors));
       },
     }),
   );
