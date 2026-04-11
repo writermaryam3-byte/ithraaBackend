@@ -27,7 +27,7 @@ export class UsersService {
     });
     const user = manager.create(User, {
       ...dto,
-      password_hash: hashed,
+      password: hashed,
       roles: dbRoles,
     });
     return manager.save(user);

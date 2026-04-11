@@ -11,8 +11,8 @@ export class OrganizationSignupStrategy implements SignupStrategy {
     dto: OrganizationSignupDto,
   ) {
     const organization = manager.create(Organization, {
-      organization_name: dto.organization_name,
-      organization_type: dto.organization_type,
+      organizationName: dto.organizationName,
+      organizationType: dto.organizationType,
       owner: user,
     });
     void (await manager.save(organization));

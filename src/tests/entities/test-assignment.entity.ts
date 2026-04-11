@@ -14,7 +14,7 @@ export class TestAssignment {
   test: Test;
 
   @Column({ type: 'date' })
-  due_date: Date;
+  dueDate: Date;
 
   @Column({ default: 'pending' })
   status: string;

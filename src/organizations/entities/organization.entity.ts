@@ -18,20 +18,20 @@ export class Organization {
   id: string;
 
   @Column()
-  organization_name: string;
+  organizationName: string;
 
   @Column({
     type: 'enum',
     enum: OrganizationType,
   })
-  organization_type: OrganizationType;
+  organizationType: OrganizationType;
 
   @Column({
     type: 'enum',
     enum: ApprovalStatus,
     default: ApprovalStatus.PENDING,
   })
-  approval_status: ApprovalStatus;
+  approvalStatus: ApprovalStatus;
 
   @OneToOne(() => User, (user) => user.organization, { onDelete: 'CASCADE' })
   @JoinColumn()

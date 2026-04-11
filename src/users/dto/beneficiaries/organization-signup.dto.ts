@@ -9,17 +9,17 @@ export class OrganizationSignupDto extends BaseSignupDto {
     example: AccountType.ORGANIZATION,
   })
   @IsEnum(AccountType)
-  account_type: AccountType.ORGANIZATION;
+  accountType: AccountType.ORGANIZATION;
 
   @ApiProperty({
     example: 'organization-name',
   })
   @IsString()
-  organization_name: string;
+  organizationName: string;
 
   @ApiProperty({
     example: OrganizationType.SCHOOL,
   })
   @IsEnum(OrganizationType)
-  organization_type: OrganizationType;
+  organizationType: OrganizationType;
 }

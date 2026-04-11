@@ -28,7 +28,7 @@ export class GradesService {
     return grades.map((g) => ({
       id: g.id,
       name: g.name,
-      organizationName: g.organization.organization_name,
+      organizationName: g.organization.organizationName,
     }));
   }
 

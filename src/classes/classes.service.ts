@@ -36,7 +36,7 @@ export class ClassesService {
       gradeName: cls.grade.name,
       children: cls.children,
       name: cls.name,
-      organizationName: cls.grade.organization.organization_name,
+      organizationName: cls.grade.organization.organizationName,
     }));
   }
 

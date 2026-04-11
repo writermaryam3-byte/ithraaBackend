@@ -75,7 +75,7 @@ export class AuthController {
 
     if (!session) throw new UnauthorizedException();
 
-    const valid = await bcrypt.compare(token, session.refresh_token_hash);
+    const valid = await bcrypt.compare(token, session.refreshTokenHash);
 
     if (!valid) {
       await this.sessionsService.deleteAllUserSessions(payload.sub);

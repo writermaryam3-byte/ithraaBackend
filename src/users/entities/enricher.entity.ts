@@ -18,12 +18,12 @@ export class Enricher {
   user: User;
 
   @Column()
-  organization_name: string;
+  organizationName: string;
 
   @Column({
     type: 'enum',
     enum: ApprovalStatus,
     default: ApprovalStatus.PENDING,
   })
-  approval_status: ApprovalStatus;
+  approvalStatus: ApprovalStatus;
 }

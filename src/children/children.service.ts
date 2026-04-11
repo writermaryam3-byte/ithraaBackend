@@ -27,14 +27,14 @@ export class ChildrenService {
   async create(createChildWithParentDto: CreateChildWithParentDto) {
     return this.dataSource.transaction(async (manager) => {
       // check organization
-      if (createChildWithParentDto.child.organization_id) {
+      if (createChildWithParentDto.child.organizationId) {
         await this.organizationsService.findOneOrFail(
-          createChildWithParentDto.child.organization_id,
+          createChildWithParentDto.child.organizationId,
         );
       }
 
       // check user (creator)
-      await this.usersService.findById(createChildWithParentDto.child.user_id);
+      await this.usersService.findById(createChildWithParentDto.child.userId);
 
       // check parent exists
       const isExists = await this.authService.isAlreadyExits(
@@ -60,10 +60,10 @@ export class ChildrenService {
         name: createChildWithParentDto.child.name,
         birthDate: createChildWithParentDto.child.birthDate,
         gender: createChildWithParentDto.child.gender,
-        organization: createChildWithParentDto.child.organization_id
-          ? { id: createChildWithParentDto.child.organization_id }
+        organization: createChildWithParentDto.child.organizationId
+          ? { id: createChildWithParentDto.child.organizationId }
           : null,
-        user: { id: createChildWithParentDto.child.user_id },
+        user: { id: createChildWithParentDto.child.userId },
         parent: { id: parent.id },
       });
 

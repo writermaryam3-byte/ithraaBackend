@@ -13,8 +13,8 @@ export class TestResult {
   score: number;
 
   @Column({ nullable: true })
-  answers_json: string;
+  answersJson: string;
 
   @Column({ type: 'timestamp', nullable: true })
-  created_at: Date;
+  createdAt: Date;
 }

@@ -12,10 +12,10 @@ export class Session {
   id: string;
 
   @Column()
-  user_id: string;
+  userId: string;
 
   @Column()
-  refresh_token_hash: string;
+  refreshTokenHash: string;
 
   @Column({ nullable: true })
   device: string;
@@ -24,8 +24,8 @@ export class Session {
   ip: string;
 
   @Column()
-  expires_at: Date;
+  expiresAt: Date;
 
   @CreateDateColumn()
-  created_at: Date;
+  createdAt: Date;
 }

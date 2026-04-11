@@ -46,7 +46,7 @@ export class TestsService {
     const assignment = this.assignmentRepo.create({
       child,
       test,
-      due_date: new Date(dto.due_date),
+      dueDate: new Date(dto.dueDate),
       status: 'pending',
     });
 
@@ -74,8 +74,8 @@ export class TestsService {
     const result = this.resultRepo.create({
       assignment,
       score: totalScore,
-      answers_json: JSON.stringify(dto.answers),
-      created_at: new Date(),
+      answersJson: JSON.stringify(dto.answers),
+      createdAt: new Date(),
     });
 
     return this.resultRepo.save(result);

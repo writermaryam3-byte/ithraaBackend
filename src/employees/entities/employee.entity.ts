@@ -27,5 +27,5 @@ export class Employee {
   organization: Organization;
 
   @Column()
-  job_title: string;
+  jobTitle: string;
 }

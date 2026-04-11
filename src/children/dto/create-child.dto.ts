@@ -39,7 +39,7 @@ export class CreateChildDto {
   })
   @IsOptional()
   @IsUUID()
-  organization_id?: string;
+  organizationId?: string;
 
   @ApiProperty({
     description: 'user ID',
@@ -47,7 +47,7 @@ export class CreateChildDto {
     format: 'uuid',
   })
   @IsUUID()
-  user_id: string;
+  userId: string;
 }
 
 export class CreateChildWithParentDto {

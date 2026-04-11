@@ -8,7 +8,7 @@ export class CreateEmployeeDto extends BaseSignupDto {
   })
   @IsString()
   @Length(2, 100)
-  job_title: string;
+  jobTitle: string;
 
   @ApiProperty({
     description: 'organization ID',
@@ -16,5 +16,5 @@ export class CreateEmployeeDto extends BaseSignupDto {
     format: 'uuid',
   })
   @IsUUID()
-  organization_id: string;
+  organizationId: string;
 }

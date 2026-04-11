@@ -135,5 +135,5 @@ export class CreateTestAssignmentDto {
     format: 'date',
   })
   @IsDateString()
-  due_date: string;
+  dueDate: string;
 }

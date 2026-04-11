@@ -32,7 +32,7 @@ export class User {
 
   @Column()
   @Exclude()
-  password_hash: string;
+  password: string;
 
   @Column({ default: false })
   isPhoneVerified: boolean;
@@ -60,8 +60,8 @@ export class User {
   parentChildren: Child[];
 
   @CreateDateColumn()
-  created_at: Date;
+  createdAt: Date;
 
   @UpdateDateColumn()
-  updated_at: Date;
+  updatedAt: Date;
 }

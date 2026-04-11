@@ -16,8 +16,8 @@ export class ChildReport {
   assignment: TestAssignment;
 
   @Column('text')
-  score_json: string;
+  scoreJson: string;
 
   @CreateDateColumn()
-  created_at: Date;
+  createdAt: Date;
 }

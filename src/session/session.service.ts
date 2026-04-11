@@ -14,11 +14,11 @@ export class SessionService {
     const hash = await bcrypt.hash(createSessionDto.refreshToken, 10);
 
     const session = this.repo.create({
-      user_id: createSessionDto.userId,
-      refresh_token_hash: hash,
+      userId: createSessionDto.userId,
+      refreshTokenHash: hash,
       device: createSessionDto.device,
       ip: createSessionDto.ip,
-      expires_at: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+      expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
     });
 
     return this.repo.save(session);
@@ -32,7 +32,7 @@ export class SessionService {
   }
   async findValidSession(userId: string) {
     return this.repo.findOne({
-      where: { user_id: userId },
+      where: { userId },
     });
   }
 
@@ -41,6 +41,6 @@ export class SessionService {
   }
 
   async deleteAllUserSessions(userId: string) {
-    await this.repo.delete({ user_id: userId });
+    await this.repo.delete({ userId });
   }
 }

@@ -54,7 +54,7 @@ export class AuthProvider {
 
     if (!user) return null;
 
-    const match = await bcrypt.compare(pass, user.password_hash);
+    const match = await bcrypt.compare(pass, user.password);
 
     if (!match) return null;
 
@@ -107,9 +107,9 @@ export class AuthProvider {
 
   async beneficiariesSignup(dto: BeneficiariesSignupDto) {
     return this.dataSource.transaction(async (manager) => {
-      const strategy = this.strategyFactory.getStrategy(dto.account_type);
+      const strategy = this.strategyFactory.getStrategy(dto.accountType);
 
-      switch (dto.account_type) {
+      switch (dto.accountType) {
         case AccountType.ORGANIZATION: {
           const user = await this.usersService.create(
             {

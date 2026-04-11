@@ -42,8 +42,8 @@ export class EmployeesService {
       );
 
       const employee = manager.create(Employee, {
-        job_title: dto.job_title,
-        organization: { id: dto.organization_id },
+        jobTitle: dto.jobTitle,
+        organization: { id: dto.organizationId },
         user,
       });
 
@@ -80,7 +80,7 @@ export class EmployeesService {
   async update(id: string, updateEmployeeDto: UpdateEmployeeDto) {
     const employee = await this.findOne(id);
     Object.assign(employee, {
-      job_title: updateEmployeeDto.job_title ?? employee.job_title,
+      jobTitle: updateEmployeeDto.jobTitle ?? employee.jobTitle,
     });
     Object.assign(employee.user, {
       name: updateEmployeeDto.name ?? employee.user.name,

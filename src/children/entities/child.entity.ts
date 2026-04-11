@@ -29,7 +29,7 @@ export class Child {
   gender: Gender;
 
   @ManyToOne(() => Organization, { nullable: true, onDelete: 'CASCADE' })
-  @JoinColumn({ name: 'organization_id' })
+  @JoinColumn({ name: 'organizationId' })
   organization: Organization | null;
 
   @ManyToOne(() => Class, (cls) => cls.children, {
@@ -40,7 +40,7 @@ export class Child {
   class: Class;
 
   @ManyToOne(() => User, (user) => user.children, { onDelete: 'CASCADE' })
-  @JoinColumn({ name: 'user_id' })
+  @JoinColumn({ name: 'userId' })
   user: User;
 
   @ManyToOne(() => User, (user) => user.children, { onDelete: 'CASCADE' })
@@ -51,8 +51,8 @@ export class Child {
   profile: ChildProfile;
 
   @CreateDateColumn()
-  created_at: Date;
+  createdAt: Date;
 
   @UpdateDateColumn()
-  updated_at: Date;
+  updatedAt: Date;
 }
