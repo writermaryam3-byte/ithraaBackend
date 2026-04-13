@@ -1,4 +1,4 @@
-import { Module } from '@nestjs/common';
+import { forwardRef, Module } from '@nestjs/common';
 import { UsersController } from './controllers/users.controller';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { User } from './entities/user.entity';
@@ -21,6 +21,7 @@ import { ParentsServices } from './services/parents.service';
 import { EnrichersService } from './services/enrichers.service';
 import { Enricher } from './entities/enricher.entity';
 import { EnrichersController } from './controllers/enrichers.controller';
+import { NotificationsModule } from 'src/notifications/notifications.module';
 
 @Module({
   controllers: [
@@ -44,6 +45,7 @@ import { EnrichersController } from './controllers/enrichers.controller';
     MailerModule,
     SessionModule,
     PassportModule,
+    forwardRef(() => NotificationsModule),
     JwtModule.registerAsync({
       inject: [ConfigService],
       useFactory: (config: ConfigService) => ({

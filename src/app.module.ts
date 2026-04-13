@@ -7,7 +7,7 @@ import { UsersModule } from './users/users.module';
 import { OrganizationsModule } from './organizations/organizations.module';
 import { EmployeesModule } from './employees/employees.module';
 import { TestsModule } from './tests/tests.module';
-import { ConfigModule } from '@nestjs/config';
+import { ConfigModule, ConfigService } from '@nestjs/config';
 import { SessionModule } from './session/session.module';
 import { APP_GUARD, APP_INTERCEPTOR } from '@nestjs/core';
 
@@ -17,10 +17,23 @@ import { JwtAuthGuard } from './users/guards/auth.guard';
 import { RolesGuard } from './users/guards/roles.guard';
 import { ClassesModule } from './classes/classes.module';
 import { GradesModule } from './grades/grades.module';
+import { BullModule } from '@nestjs/bull';
+import { NotificationsModule } from './notifications/notifications.module';
 
 @Module({
   imports: [
     ConfigModule.forRoot({ isGlobal: true }),
+    BullModule.forRootAsync({
+      inject: [ConfigService],
+      useFactory: (config: ConfigService) => ({
+        redis: {
+          host: config.get<string>('REDIS_HOST', '127.0.0.1'),
+          port: config.get<number>('REDIS_PORT', 6379),
+          password: config.get<string>('REDIS_PASSWORD') || undefined,
+          tls: config.get<string>('REDIS_TLS') === 'true' ? {} : undefined,
+        },
+      }),
+    }),
     ChildrenModule,
     TypeOrmModule.forRoot({
       type: 'postgres',
@@ -43,6 +56,7 @@ import { GradesModule } from './grades/grades.module';
     MailerModule,
     ClassesModule,
     GradesModule,
+    NotificationsModule,
   ],
   controllers: [AppController],
   providers: [

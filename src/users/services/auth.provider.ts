@@ -13,6 +13,8 @@ import { BeneficiariesSignupDto } from '../dto/beneficiaries/beneficiaries-signu
 import { EnrichersSignupDto } from '../dto/enrichers/enrichers-signup.dto';
 import { UsersService } from './users.service';
 import { Enricher } from '../entities/enricher.entity';
+import { NotificationsService } from 'src/notifications/notifications.service';
+import { NotificationDelivery } from 'src/notifications/enums/notification-delivery.enum';
 
 export type TokenPayload = {
   sub: string;
@@ -30,7 +32,12 @@ export class AuthProvider {
     private readonly dataSource: DataSource,
     private readonly strategyFactory: SignupStrategyFactory,
     private readonly mailerService: MailerService,
+    private readonly notificationsService: NotificationsService,
   ) {}
+
+  generateVerificationToken(userId: string) {
+    return this.jwtService.sign({ userId }, { expiresIn: '1d' });
+  }
 
   async verifyEmail(token: string) {
     const payload = this.jwtService.verify<{ sub: string; userId: string }>(
@@ -122,7 +129,20 @@ export class AuthProvider {
             manager,
           );
           await strategy?.saveExtraData(manager, user, dto);
-          await this.mailerService.sendVerificationEmail(user.email, user.id);
+          await this.notificationsService.enqueue({
+            userId: user.id,
+            title: 'Welcome 🎉',
+            message: `Welcome ${user.name}, we're happy to have you معنا!`,
+            delivery: NotificationDelivery.BOTH, // email + inapp
+            email: user.email,
+          });
+          await this.notificationsService.enqueue({
+            userId: user.id,
+            title: 'verification email',
+            message: `Welcome ${user.name}, we're happy to have you معنا!`,
+            delivery: NotificationDelivery.VERIFYEMAIL, // email + inapp
+            email: user.email,
+          });
           return user;
         }
       }
@@ -149,8 +169,20 @@ export class AuthProvider {
 
       await manager.save(enricher);
 
-      await this.mailerService.sendVerificationEmail(user.email, user.id);
-
+      await this.notificationsService.enqueue({
+        userId: user.id,
+        title: 'Welcome 🎉',
+        message: `Welcome ${user.name}, we're happy to have you معنا!`,
+        delivery: NotificationDelivery.BOTH, // email + inapp
+        email: user.email,
+      });
+      await this.notificationsService.enqueue({
+        userId: user.id,
+        title: 'verification email',
+        message: `Welcome ${user.name}, we're happy to have you معنا!`,
+        delivery: NotificationDelivery.VERIFYEMAIL, // email + inapp
+        email: user.email,
+      });
       return { user, enricher };
     });
   }
