@@ -19,10 +19,18 @@ import { ClassesModule } from './classes/classes.module';
 import { GradesModule } from './grades/grades.module';
 import { BullModule } from '@nestjs/bull';
 import { NotificationsModule } from './notifications/notifications.module';
+import { EventEmitterModule } from '@nestjs/event-emitter';
+import { EvaluationsModule } from 'src/evaluations/evaluations.module';
 
 @Module({
   imports: [
     ConfigModule.forRoot({ isGlobal: true }),
+    EventEmitterModule.forRoot({
+      // Wildcards are handy for future `evaluation.*` listeners
+      wildcard: true,
+      delimiter: '.',
+      maxListeners: 50,
+    }),
     BullModule.forRootAsync({
       inject: [ConfigService],
       useFactory: (config: ConfigService) => ({
@@ -57,6 +65,7 @@ import { NotificationsModule } from './notifications/notifications.module';
     ClassesModule,
     GradesModule,
     NotificationsModule,
+    EvaluationsModule,
   ],
   controllers: [AppController],
   providers: [

@@ -96,7 +96,7 @@ export class AuthController {
   }
   @Delete('logout-all')
   async logoutAll(@Req() req: AuthRequest) {
-    await this.sessionsService.deleteAllUserSessions(req.user.id);
+    await this.sessionsService.deleteAllUserSessions(req.user.userId);
   }
 
   @Get('verify-email')
