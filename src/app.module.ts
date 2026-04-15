@@ -21,6 +21,8 @@ import { BullModule } from '@nestjs/bull';
 import { NotificationsModule } from './notifications/notifications.module';
 import { EventEmitterModule } from '@nestjs/event-emitter';
 import { EvaluationsModule } from 'src/evaluations/evaluations.module';
+import { ScheduleModule } from '@nestjs/schedule';
+import { PaymentsModule } from 'src/payments/payments.module';
 
 @Module({
   imports: [
@@ -31,6 +33,7 @@ import { EvaluationsModule } from 'src/evaluations/evaluations.module';
       delimiter: '.',
       maxListeners: 50,
     }),
+    ScheduleModule.forRoot(),
     BullModule.forRootAsync({
       inject: [ConfigService],
       useFactory: (config: ConfigService) => ({
@@ -66,6 +69,7 @@ import { EvaluationsModule } from 'src/evaluations/evaluations.module';
     GradesModule,
     NotificationsModule,
     EvaluationsModule,
+    PaymentsModule,
   ],
   controllers: [AppController],
   providers: [
