@@ -1,6 +1,7 @@
 import {
   Body,
   Controller,
+  Get,
   Param,
   ParseUUIDPipe,
   Post,
@@ -35,6 +36,33 @@ export class EvaluationsController {
   create(@Body() dto: CreateEvaluationDto, @Req() req: AuthRequest) {
     const user = req.user as unknown as JwtRequestUser;
     return this.service.createEvaluation(dto, {
+      userId: user.userId,
+      roles: user.roles.map((r) => r.name),
+    });
+  }
+
+  @Roles(UserRole.ADMIN)
+  @Get()
+  @ApiOperation({ summary: 'Get all evaluations (admin)' })
+  getAll(@Req() req: AuthRequest) {
+    const user = req.user as unknown as JwtRequestUser;
+    return this.service.getAllEvaluationsForAdmin({
+      userId: user.userId,
+      roles: user.roles.map((r) => r.name),
+    });
+  }
+
+  @Roles(UserRole.ADMIN)
+  @Get(':id/details')
+  @ApiOperation({
+    summary: 'Get evaluation details with questions/answers (admin)',
+  })
+  getDetails(
+    @Param('id', new ParseUUIDPipe()) evaluationId: string,
+    @Req() req: AuthRequest,
+  ) {
+    const user = req.user as unknown as JwtRequestUser;
+    return this.service.getEvaluationDetailsForAdmin(evaluationId, {
       userId: user.userId,
       roles: user.roles.map((r) => r.name),
     });

@@ -2,7 +2,9 @@ import {
   BadRequestException,
   Body,
   Controller,
+  forwardRef,
   Headers,
+  Inject,
   Param,
   ParseUUIDPipe,
   Post,
@@ -23,11 +25,16 @@ import { type AuthRequest } from 'src/common/interfaces/auth-request.interface';
 import { PaymentsService } from './payments.service';
 import { CreatePaymentDto } from './dto/create-payment.dto';
 import { RetryPaymentDto } from './dto/retry-payment.dto';
+import { PrivateChildAttemptsService } from 'src/children/private-child-attempts.service';
 
 @ApiTags('payments')
 @Controller('payments')
 export class PaymentsController {
-  constructor(private readonly payments: PaymentsService) {}
+  constructor(
+    private readonly payments: PaymentsService,
+    @Inject(forwardRef(() => PrivateChildAttemptsService))
+    private readonly privateChildAttempts: PrivateChildAttemptsService,
+  ) {}
 
   @Post()
   @ApiBearerAuth()
@@ -58,6 +65,23 @@ export class PaymentsController {
       );
     }
     return this.payments.handleWebhook(raw, signature);
+  }
+
+  @Post(':attemptId/initiate')
+  @ApiBearerAuth()
+  @ApiOperation({
+    summary:
+      'Refresh or retry checkout for a private extra attempt (after admin approval)',
+  })
+  @Roles(UserRole.PARENT)
+  initiatePrivateExtra(
+    @Param('attemptId', new ParseUUIDPipe()) attemptId: string,
+    @Req() req: AuthRequest,
+  ) {
+    return this.privateChildAttempts.initiateOrRefreshExtraPayment(
+      attemptId,
+      req.user.userId,
+    );
   }
 
   @Post(':id/retry')

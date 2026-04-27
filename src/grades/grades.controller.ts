@@ -13,25 +13,28 @@ import { CreateGradeDto } from './dto/create-grade.dto';
 import { UpdateGradeDto } from './dto/update-grade.dto';
 import { Roles } from 'src/users/decorators/role.decorator';
 import { UserRole } from 'src/common/enums/role.enum';
-import { ApiTags, ApiBearerAuth } from '@nestjs/swagger';
+import { ApiTags, ApiBearerAuth, ApiOperation } from '@nestjs/swagger';
 @ApiTags('grades')
 @ApiBearerAuth()
 @Controller('grades')
 export class GradesController {
   constructor(private readonly gradesService: GradesService) {}
 
+  @ApiOperation({ summary: 'create grade' })
   @Roles(UserRole.ORGANIZATIONOWNER)
   @Post()
   create(@Body() createGradeDto: CreateGradeDto) {
     return this.gradesService.create(createGradeDto);
   }
 
+  @ApiOperation({ summary: 'get all grades' })
   @Roles(UserRole.ADMIN)
   @Get()
   findAll() {
     return this.gradesService.findAll();
   }
 
+  @ApiOperation({ summary: 'get one grade' })
   @Get(':id')
   findOne(@Param('id', new ParseUUIDPipe()) id: string) {
     return this.gradesService.findOne(id);

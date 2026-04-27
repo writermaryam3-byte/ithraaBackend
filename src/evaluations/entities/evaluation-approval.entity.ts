@@ -30,4 +30,3 @@ export class EvaluationApproval {
   @CreateDateColumn({ type: 'timestamp' })
   approvedAt: Date;
 }
-

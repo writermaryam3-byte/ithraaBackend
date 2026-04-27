@@ -13,8 +13,9 @@ import { PaymentStatusEnum } from '../enums/payment-status.enum';
 import { PaymentProviderEnum } from '../enums/payment-provider.enum';
 
 export type PaymentMetadata = {
-  childId: string;
+  childId?: string;
   attemptRequestId?: string;
+  privateAttemptId?: string;
   description?: string;
   [key: string]: unknown;
 };
@@ -32,6 +33,17 @@ export class Payment {
   @ManyToOne(() => User, { onDelete: 'CASCADE' })
   @JoinColumn({ name: 'userId' })
   user: User;
+
+  @Index()
+  @Column({ type: 'uuid', nullable: true })
+  childId: string | null;
+
+  @Index()
+  @Column({ type: 'uuid', nullable: true })
+  privateAttemptId: string | null;
+
+  @Column({ type: 'varchar', length: 2048, nullable: true })
+  paymentUrl: string | null;
 
   /**
    * Amount in major units (SAR), stored with 2 decimal places.

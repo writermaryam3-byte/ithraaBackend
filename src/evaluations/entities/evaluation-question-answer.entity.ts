@@ -17,7 +17,9 @@ export class EvaluationQuestionAnswer {
   @Column({ type: 'uuid' })
   questionId: string;
 
-  @ManyToOne(() => EvaluationQuestion, (q) => q.answers, { onDelete: 'CASCADE' })
+  @ManyToOne(() => EvaluationQuestion, (q) => q.answers, {
+    onDelete: 'CASCADE',
+  })
   @JoinColumn({ name: 'questionId' })
   question: EvaluationQuestion;
 
@@ -27,4 +29,3 @@ export class EvaluationQuestionAnswer {
   @Column({ type: 'boolean', default: false })
   isCorrect: boolean;
 }
-

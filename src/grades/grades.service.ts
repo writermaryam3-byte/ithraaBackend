@@ -5,17 +5,22 @@ import { Grade } from './entities/grade.entity';
 import { Repository } from 'typeorm';
 import { InjectRepository } from '@nestjs/typeorm';
 import { AdminGradeResponseDto } from './dto/admin-grade-response.dto';
+import { OrganizationsService } from 'src/organizations/organizations.service';
 
 @Injectable()
 export class GradesService {
   constructor(
     @InjectRepository(Grade)
     private readonly gradeRepo: Repository<Grade>,
+    private readonly organizationsService: OrganizationsService,
   ) {}
   async create(createGradeDto: CreateGradeDto) {
+    const org = this.organizationsService.findOneOrFail(
+      createGradeDto.organizationId,
+    );
     const grade = await this.gradeRepo.save({
       ...createGradeDto,
-      organization: { id: createGradeDto.organizationId },
+      organization: { id: (await org).id },
     });
     return grade;
   }

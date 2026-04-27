@@ -1,6 +1,7 @@
 import {
   BadRequestException,
   ForbiddenException,
+  Inject,
   Injectable,
   Logger,
   NotFoundException,
@@ -12,12 +13,11 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { DataSource, QueryFailedError, Repository } from 'typeorm';
 import { createHash } from 'crypto';
 import { ConfigService } from '@nestjs/config';
-import { Inject } from '@nestjs/common';
 import { EventEmitter2 } from 'eventemitter2';
-import { Child } from 'src/children/entities/child.entity';
 import { Payment, type PaymentMetadata } from './entities/payment.entity';
 import { PaymentWebhookDedup } from './entities/payment-webhook-dedup.entity';
 import { CreatePaymentDto } from './dto/create-payment.dto';
+import type { CreatePaymentFields } from './types/create-payment-fields.type';
 import { PaymentStatusEnum } from './enums/payment-status.enum';
 import { PaymentProviderEnum } from './enums/payment-provider.enum';
 import { PaymentJobName } from './enums/payment-job-name.enum';
@@ -54,11 +54,11 @@ function isPgUniqueViolation(err: unknown): boolean {
 @Injectable()
 export class PaymentsService {
   private readonly logger = new Logger(PaymentsService.name);
+  private readonly provider: PaymentProvider;
 
   constructor(
     private readonly dataSource: DataSource,
-    @Inject(PAYMENT_PROVIDER)
-    private readonly provider: PaymentProvider,
+    @Inject(PAYMENT_PROVIDER) providerToken: unknown,
     private readonly config: ConfigService,
     private readonly events: EventEmitter2,
     @InjectQueue('payment-processing')
@@ -67,9 +67,24 @@ export class PaymentsService {
     private readonly payments: Repository<Payment>,
     @InjectRepository(PaymentWebhookDedup)
     private readonly webhookDedup: Repository<PaymentWebhookDedup>,
-    @InjectRepository(Child)
-    private readonly children: Repository<Child>,
-  ) {}
+  ) {
+    this.provider = providerToken as PaymentProvider;
+  }
+
+  /**
+   * Class-validator DTO metadata can surface optional fields as the TS intrinsic
+   * `error` type under type-aware ESLint; normalize once for safe assignments.
+   */
+  private normalizeCreatePaymentDto(
+    dto: CreatePaymentDto,
+  ): CreatePaymentFields {
+    return dto as unknown as CreatePaymentFields;
+  }
+
+  private extractProviderPaymentIdFromBody(body: unknown): string | null {
+    const raw: unknown = this.provider.extractProviderPaymentId(body);
+    return typeof raw === 'string' && raw.length > 0 ? raw : null;
+  }
 
   private resolveProvider(
     requested?: PaymentProviderEnum,
@@ -87,7 +102,13 @@ export class PaymentsService {
     return code;
   }
 
-  private defaultExpiresAt(): Date {
+  private resolveExpiresAt(isPrivateExtra: boolean): Date {
+    if (isPrivateExtra) {
+      const minutes = Number(
+        this.config.get<string>('PRIVATE_ATTEMPT_PAYMENT_EXPIRY_MINUTES') ?? 30,
+      );
+      return new Date(Date.now() + minutes * 60_000);
+    }
     const minutes = Number(
       this.config.get<string>('PAYMENT_EXPIRY_MINUTES') ?? 60 * 24,
     );
@@ -107,35 +128,45 @@ export class PaymentsService {
     expiresAt: Date;
     status: PaymentStatusEnum;
   }> {
-    const currency = (dto.currency ?? 'SAR').toUpperCase();
+    const input = this.normalizeCreatePaymentDto(dto);
+    const currency = (input.currency ?? 'SAR').toUpperCase();
     if (currency !== 'SAR') {
       throw new BadRequestException('Only SAR currency is supported');
     }
 
-    const providerCode = this.resolveProvider(dto.provider);
+    const providerCode = this.resolveProvider(input.provider);
 
-    const child = await this.children.findOne({
-      where: { id: dto.childId, parent: { id: userId } },
-    });
-    if (!child) {
+    const childExists = await this.dataSource
+      .createQueryBuilder()
+      .from('children', 'c')
+      .where('c.id = :childId', { childId: input.childId })
+      .andWhere('c.parentId = :parentId', { parentId: userId })
+      .getCount();
+    if (childExists < 1) {
       throw new ForbiddenException('Child not found for this parent');
     }
 
-    const metadata: PaymentMetadata = {
-      childId: dto.childId,
-      ...(dto.attemptRequestId
-        ? { attemptRequestId: dto.attemptRequestId }
-        : {}),
-      ...(dto.description ? { description: dto.description } : {}),
-    };
+    const metadata: PaymentMetadata = { childId: input.childId };
+    if (input.attemptRequestId) {
+      metadata.attemptRequestId = input.attemptRequestId;
+    }
+    if (input.privateAttemptId) {
+      metadata.privateAttemptId = input.privateAttemptId;
+    }
+    if (input.description) {
+      metadata.description = input.description;
+    }
 
-    const amountStr = dto.amount.toFixed(2);
+    const amountStr = input.amount.toFixed(2);
     const publicUrl =
       this.config.get<string>('APP_PUBLIC_URL')?.replace(/\/$/, '') ??
       'http://localhost:3000';
 
     const payment = this.payments.create({
       userId,
+      childId: input.childId,
+      privateAttemptId: input.privateAttemptId ?? null,
+      paymentUrl: null,
       amount: amountStr,
       currency,
       status: PaymentStatusEnum.PENDING,
@@ -144,23 +175,24 @@ export class PaymentsService {
       metadata,
       retryCount: 0,
       maxRetries: this.maxRetriesDefault(),
-      expiresAt: this.defaultExpiresAt(),
+      expiresAt: this.resolveExpiresAt(Boolean(input.privateAttemptId)),
     });
 
     const saved = await this.payments.save(payment);
 
     try {
       const session = await this.provider.createPayment({
-        amount: dto.amount,
+        amount: input.amount,
         currency: 'SAR',
         clientReferenceId: saved.id,
-        description: dto.description,
+        description: input.description,
         successUrl: `${publicUrl}/payments/complete?ref=${encodeURIComponent(saved.id)}`,
         cancelUrl: `${publicUrl}/payments/cancel?ref=${encodeURIComponent(saved.id)}`,
         metadata: metadata as Record<string, unknown>,
       });
 
       saved.providerPaymentId = session.providerId;
+      saved.paymentUrl = session.url;
       await this.payments.save(saved);
 
       this.logger.log(
@@ -184,6 +216,28 @@ export class PaymentsService {
     }
   }
 
+  async createPaymentForPrivateExtraAttempt(
+    userId: string,
+    input: {
+      childId: string;
+      privateAttemptId: string;
+      amount: number;
+      description?: string;
+    },
+  ): Promise<{
+    id: string;
+    checkoutUrl: string;
+    expiresAt: Date;
+    status: PaymentStatusEnum;
+  }> {
+    return this.createPayment(userId, {
+      amount: input.amount,
+      childId: input.childId,
+      privateAttemptId: input.privateAttemptId,
+      description: input.description,
+    });
+  }
+
   /**
    * Validates signature, deduplicates, enqueues async processing.
    */
@@ -205,7 +259,7 @@ export class PaymentsService {
       throw new BadRequestException('Invalid JSON webhook body');
     }
 
-    const providerPaymentId = this.provider.extractProviderPaymentId(parsed);
+    const providerPaymentId = this.extractProviderPaymentIdFromBody(parsed);
     if (!providerPaymentId) {
       throw new BadRequestException(
         'Webhook payload missing payment identifier',
@@ -478,7 +532,9 @@ export class PaymentsService {
 
     payment.retryCount += 1;
     payment.status = PaymentStatusEnum.PENDING;
-    payment.expiresAt = this.defaultExpiresAt();
+    payment.expiresAt = this.resolveExpiresAt(
+      Boolean(payment.privateAttemptId),
+    );
     payment.providerPaymentId = null;
     await this.payments.save(payment);
 
@@ -499,6 +555,7 @@ export class PaymentsService {
       });
 
       payment.providerPaymentId = session.providerId;
+      payment.paymentUrl = session.url;
       await this.payments.save(payment);
 
       return {

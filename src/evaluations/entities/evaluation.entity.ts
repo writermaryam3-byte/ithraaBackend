@@ -1,6 +1,12 @@
-import { Entity, PrimaryGeneratedColumn, Column, OneToMany, Index } from 'typeorm';
-import { EvaluationAttempt } from './evaluation-attempt.entity';
+import {
+  Entity,
+  PrimaryGeneratedColumn,
+  Column,
+  OneToMany,
+  Index,
+} from 'typeorm';
 import { EvaluationQuestion } from './evaluation-question.entity';
+import { EvaluationAttempt } from './evaluation-attempt.entity';
 
 @Entity('evaluations')
 export class Evaluation {
@@ -20,4 +26,3 @@ export class Evaluation {
   @OneToMany(() => EvaluationQuestion, (q) => q.evaluation, { cascade: true })
   questions: EvaluationQuestion[];
 }
-

@@ -14,7 +14,7 @@ import { CreateChildWithParentDto } from './dto/create-child.dto';
 import { UpdateChildDto } from './dto/update-child.dto';
 import { UserRole } from 'src/common/enums/role.enum';
 import { Roles } from 'src/users/decorators/role.decorator';
-import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
+import { ApiBearerAuth, ApiTags, ApiOperation } from '@nestjs/swagger';
 
 @ApiTags('children')
 @ApiBearerAuth()
@@ -28,6 +28,10 @@ export class ChildrenController {
   //   UserRole.TEACHER,
   // )
   @Post()
+  @ApiOperation({
+    summary:
+      'add child with auto parent account creation (organization members)',
+  })
   create(
     @Body()
     createChildWithParentDto: CreateChildWithParentDto,
@@ -36,22 +40,26 @@ export class ChildrenController {
   }
 
   @Roles(UserRole.ADMIN)
+  @ApiOperation({ summary: 'Get all children (admin)' })
   @Get('all')
   findAll() {
     return this.childrenService.findAll();
   }
 
   @Get()
+  @ApiOperation({ summary: 'Get all children for specific user' })
   findByUser(@Query('userId', new ParseUUIDPipe()) userId: string) {
     return this.childrenService.findByUser(userId);
   }
 
   @Get(':id')
+  @ApiOperation({ summary: 'Get child data' })
   findOne(@Param('id', new ParseUUIDPipe()) id: string) {
     return this.childrenService.findOne(id);
   }
 
   @Patch(':id')
+  @ApiOperation({ summary: 'Update child' })
   update(
     @Param('id', new ParseUUIDPipe()) id: string,
     @Body() updateChildDto: UpdateChildDto,
@@ -60,6 +68,7 @@ export class ChildrenController {
   }
 
   @Delete(':id')
+  @ApiOperation({ summary: 'Delete child' })
   remove(@Param('id', new ParseUUIDPipe()) id: string) {
     return this.childrenService.remove(id);
   }

@@ -34,4 +34,3 @@ export class EvaluationQuestion {
   })
   answers: EvaluationQuestionAnswer[];
 }
-

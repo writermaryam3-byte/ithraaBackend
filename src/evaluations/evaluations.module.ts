@@ -10,6 +10,7 @@ import { EvaluationApproval } from './entities/evaluation-approval.entity';
 import { EvaluationQuestion } from './entities/evaluation-question.entity';
 import { EvaluationQuestionAnswer } from './entities/evaluation-question-answer.entity';
 import { Child } from 'src/children/entities/child.entity';
+import { ChildrenModule } from 'src/children/children.module';
 
 @Module({
   imports: [
@@ -22,6 +23,7 @@ import { Child } from 'src/children/entities/child.entity';
       EvaluationQuestionAnswer,
       Child,
     ]),
+    ChildrenModule,
   ],
   controllers: [EvaluationsController, AttemptsController],
   providers: [EvaluationsService],

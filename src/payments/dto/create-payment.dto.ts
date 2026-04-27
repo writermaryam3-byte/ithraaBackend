@@ -10,8 +10,9 @@ import {
   Min,
 } from 'class-validator';
 import { PaymentProviderEnum } from '../enums/payment-provider.enum';
+import type { CreatePaymentFields } from '../types/create-payment-fields.type';
 
-export class CreatePaymentDto {
+export class CreatePaymentDto implements CreatePaymentFields {
   @ApiProperty({ example: 199.5, description: 'Amount in SAR (major units)' })
   @IsNumber({ maxDecimalPlaces: 2 })
   @Min(0.01)
@@ -33,6 +34,14 @@ export class CreatePaymentDto {
   @IsOptional()
   @IsUUID()
   attemptRequestId?: string;
+
+  @ApiPropertyOptional({
+    format: 'uuid',
+    description: 'Private child extra-attempt entitlement id',
+  })
+  @IsOptional()
+  @IsUUID()
+  privateAttemptId?: string;
 
   @ApiPropertyOptional({ example: 'Evaluation access' })
   @IsOptional()

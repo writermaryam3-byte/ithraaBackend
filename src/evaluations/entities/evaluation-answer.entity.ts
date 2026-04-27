@@ -32,4 +32,3 @@ export class EvaluationAnswer {
   @Column({ type: 'boolean', nullable: true })
   isCorrect: boolean | null;
 }
-

@@ -7,12 +7,14 @@ import {
   Column,
   ManyToOne,
   OneToOne,
+  OneToMany,
   CreateDateColumn,
   UpdateDateColumn,
   JoinColumn,
 } from 'typeorm';
 import { ChildProfile } from './child-profile.entity';
 import { Class } from 'src/classes/entities/class.entity';
+import { ChildPrivateAttempt } from './child-private-attempt.entity';
 
 @Entity('children')
 export class Child {
@@ -49,6 +51,15 @@ export class Child {
 
   @OneToOne(() => ChildProfile, (profile) => profile.child)
   profile: ChildProfile;
+
+  @Column({ type: 'int', default: 0 })
+  attemptsUsed: number;
+
+  @Column({ default: false })
+  retakeUsed: boolean;
+
+  @OneToMany(() => ChildPrivateAttempt, (a) => a.child)
+  privateAttempts: ChildPrivateAttempt[];
 
   @CreateDateColumn()
   createdAt: Date;

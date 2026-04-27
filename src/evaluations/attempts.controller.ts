@@ -12,6 +12,7 @@ import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { Roles } from 'src/users/decorators/role.decorator';
 import { UserRole } from 'src/common/enums/role.enum';
 import { type AuthRequest } from 'src/common/interfaces/auth-request.interface';
+import { PrivateChildAttemptsService } from 'src/children/private-child-attempts.service';
 import { EvaluationsService } from './evaluations.service';
 import { SaveProgressDto } from './dto/save-progress.dto';
 import { SubmitAttemptDto } from './dto/submit-attempt.dto';
@@ -27,7 +28,50 @@ type JwtRequestUser = {
 @ApiBearerAuth()
 @Controller('attempts')
 export class AttemptsController {
-  constructor(private readonly service: EvaluationsService) {}
+  constructor(
+    private readonly service: EvaluationsService,
+    private readonly privateChildAttempts: PrivateChildAttemptsService,
+  ) {}
+
+  @Roles(UserRole.PARENT)
+  @Post(':childId/start')
+  @ApiOperation({
+    summary: 'Open the main free evaluation slot for a private child',
+  })
+  startPrivateMain(
+    @Param('childId', new ParseUUIDPipe()) childId: string,
+    @Req() req: AuthRequest,
+  ) {
+    const user = req.user as unknown as JwtRequestUser;
+    return this.privateChildAttempts.startMainSlot(childId, user.userId);
+  }
+
+  @Roles(UserRole.PARENT)
+  @Post(':childId/retake')
+  @ApiOperation({
+    summary: 'Open the free retake slot for a private child',
+  })
+  requestPrivateRetake(
+    @Param('childId', new ParseUUIDPipe()) childId: string,
+    @Req() req: AuthRequest,
+  ) {
+    const user = req.user as unknown as JwtRequestUser;
+    return this.privateChildAttempts.requestRetake(childId, user.userId);
+  }
+
+  @Roles(UserRole.PARENT)
+  @Post(':childId/request-extra')
+  @ApiOperation({
+    summary:
+      'Request a paid extra evaluation attempt (admin approval required)',
+  })
+  requestPrivateExtra(
+    @Param('childId', new ParseUUIDPipe()) childId: string,
+    @Req() req: AuthRequest,
+  ) {
+    const user = req.user as unknown as JwtRequestUser;
+    return this.privateChildAttempts.requestExtraAttempt(childId, user.userId);
+  }
 
   @Roles(UserRole.PARENT)
   @Patch(':id/save')

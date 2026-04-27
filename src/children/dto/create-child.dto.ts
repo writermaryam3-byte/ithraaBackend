@@ -20,7 +20,7 @@ export class CreateChildDto {
   name: string;
 
   @ApiProperty({
-    example: '28-2-2007',
+    example: '2007-05-21',
     format: 'date',
   })
   @IsDateString()

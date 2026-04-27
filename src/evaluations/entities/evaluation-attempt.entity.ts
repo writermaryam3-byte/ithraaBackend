@@ -77,4 +77,3 @@ export class EvaluationAttempt {
   @OneToOne(() => EvaluationApproval, (ap) => ap.attempt, { nullable: true })
   approval: EvaluationApproval | null;
 }
-

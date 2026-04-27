@@ -21,6 +21,7 @@ import { SaveProgressDto } from './dto/save-progress.dto';
 import { SubmitAttemptDto } from './dto/submit-attempt.dto';
 import { UserRole } from 'src/common/enums/role.enum';
 import type { CreateEvaluationDto } from './dto/create-evaluation.dto';
+import { PrivateChildAttemptsService } from 'src/children/private-child-attempts.service';
 type Actor = { userId: string; roles: UserRole[] };
 
 type CreateEvaluationQuestionAnswerInput = {
@@ -41,6 +42,7 @@ export class EvaluationsService {
   constructor(
     private readonly dataSource: DataSource,
     private readonly events: EventEmitter2,
+    private readonly privateChildAttempts: PrivateChildAttemptsService,
     @InjectRepository(Evaluation)
     private readonly evalRepo: Repository<Evaluation>,
     @InjectRepository(EvaluationAttempt)
@@ -76,6 +78,38 @@ export class EvaluationsService {
     return this.evalRepo.save(evaluation);
   }
 
+  async getAllEvaluationsForAdmin(actor: Actor) {
+    this.assertHasRole(actor, [UserRole.ADMIN]);
+
+    return this.evalRepo.find({
+      order: { title: 'ASC' },
+    });
+  }
+
+  async getEvaluationDetailsForAdmin(evaluationId: string, actor: Actor) {
+    this.assertHasRole(actor, [UserRole.ADMIN]);
+
+    const evaluation = await this.evalRepo.findOne({
+      where: { id: evaluationId },
+      relations: {
+        questions: {
+          answers: true,
+        },
+      },
+      order: {
+        questions: {
+          order: 'ASC',
+        },
+      },
+    });
+
+    if (!evaluation) {
+      throw new NotFoundException('Evaluation not found');
+    }
+
+    return evaluation;
+  }
+
   async startEvaluation(
     evaluationId: string,
     dto: StartEvaluationDto,
@@ -90,10 +124,11 @@ export class EvaluationsService {
 
     const child = await this.childRepo.findOne({
       where: { id: dto.childId, parent: { id: actor.userId } },
-      relations: { parent: true },
+      relations: { parent: true, organization: true },
     });
     if (!child) throw new ForbiddenException('Child not found for this parent');
 
+    const isPrivateChild = child.organization == null;
     const expiresAt = this.resolveExpiresAt(dto);
 
     return this.dataSource.transaction(async (manager) => {
@@ -105,19 +140,17 @@ export class EvaluationsService {
         lock: { mode: 'pessimistic_write' },
       });
 
+      const inProgress = attempts.some(
+        (a) => a.status === EvaluationAttemptStatus.IN_PROGRESS,
+      );
+      if (inProgress) {
+        throw new BadRequestException(
+          'Finish or submit the current attempt before starting another',
+        );
+      }
+
       const count = attempts.length;
       const last = attempts[0];
-
-      if (count >= 2) {
-        this.events.emit(EVALUATION_EVENTS.limitReached, {
-          evaluationId,
-          parentId: actor.userId,
-          childId: dto.childId,
-          attempts: count,
-          reason: 'max_attempts',
-        });
-        throw new ConflictException('Maximum attempts reached');
-      }
 
       if (last?.status === EvaluationAttemptStatus.APPROVED) {
         this.events.emit(EVALUATION_EVENTS.limitReached, {
@@ -128,6 +161,34 @@ export class EvaluationsService {
           reason: 'already_approved',
         });
         throw new BadRequestException('Retake is not allowed after approval');
+      }
+
+      let entitlementId: string | null = null;
+
+      if (isPrivateChild) {
+        const nextNum = count + 1;
+        const entitlement =
+          await this.privateChildAttempts.findEntitlementForNext(
+            manager,
+            dto.childId,
+            actor.userId,
+            nextNum,
+          );
+        if (!entitlement) {
+          throw new BadRequestException(
+            'No evaluation slot is available. Use /attempts/:childId/start, retake, request-extra, complete payment, or wait for admin approval.',
+          );
+        }
+        entitlementId = entitlement.id;
+      } else if (count >= 2) {
+        this.events.emit(EVALUATION_EVENTS.limitReached, {
+          evaluationId,
+          parentId: actor.userId,
+          childId: dto.childId,
+          attempts: count,
+          reason: 'max_attempts',
+        });
+        throw new ConflictException('Maximum attempts reached');
       }
 
       const attemptNumber = count + 1;
@@ -143,6 +204,15 @@ export class EvaluationsService {
       });
 
       await repo.save(attempt);
+
+      if (isPrivateChild && entitlementId) {
+        await this.privateChildAttempts.linkEvaluationToEntitlement(
+          manager,
+          entitlementId,
+          attempt.id,
+        );
+      }
+
       return attempt;
     });
   }
@@ -212,6 +282,19 @@ export class EvaluationsService {
       attempt.submittedAt = now;
       attempt.score = score;
       await attemptRepo.save(attempt);
+
+      const childRow = await manager.getRepository(Child).findOne({
+        where: { id: attempt.childId },
+        relations: { organization: true },
+      });
+      if (childRow?.organization == null) {
+        await this.privateChildAttempts.markPrivateAttemptCompleted(
+          manager,
+          attempt.id,
+          attempt.childId,
+          attempt.attemptNumber,
+        );
+      }
 
       this.events.emit(EVALUATION_EVENTS.submitted, {
         attemptId: attempt.id,
@@ -367,6 +450,8 @@ export class EvaluationsService {
 
     this.logger.warn(`Auto-submitting expired attempt ${attempt.id}`);
 
+    let submittedId: string | null = null;
+
     await this.dataSource.transaction(async (manager) => {
       const attemptRepo = manager.getRepository(EvaluationAttempt);
       const locked = await attemptRepo.findOne({
@@ -379,14 +464,33 @@ export class EvaluationsService {
       locked.status = EvaluationAttemptStatus.SUBMITTED;
       locked.submittedAt = now;
       await attemptRepo.save(locked);
+      submittedId = locked.id;
+
+      const childRow = await manager.getRepository(Child).findOne({
+        where: { id: locked.childId },
+        relations: { organization: true },
+      });
+      if (childRow?.organization == null) {
+        await this.privateChildAttempts.markPrivateAttemptCompleted(
+          manager,
+          locked.id,
+          locked.childId,
+          locked.attemptNumber,
+        );
+      }
     });
 
+    if (!submittedId) return;
+
+    const fresh = await this.attemptRepo.findOneBy({ id: submittedId });
+    if (!fresh) return;
+
     this.events.emit(EVALUATION_EVENTS.submitted, {
-      attemptId: attempt.id,
-      evaluationId: attempt.evaluationId,
-      parentId: attempt.parentId,
-      childId: attempt.childId,
-      score: attempt.score,
+      attemptId: fresh.id,
+      evaluationId: fresh.evaluationId,
+      parentId: fresh.parentId,
+      childId: fresh.childId,
+      score: fresh.score,
       autoSubmitted: true,
     });
   }
