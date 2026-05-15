@@ -1,3 +1,4 @@
+import type { Class } from 'src/classes/entities/class.entity';
 import { Organization } from 'src/organizations/entities/organization.entity';
 import { User } from 'src/users/entities/user.entity';
 import {
@@ -5,6 +6,7 @@ import {
   OneToOne,
   JoinColumn,
   ManyToOne,
+  OneToMany,
   Column,
   Entity,
 } from 'typeorm';
@@ -14,17 +16,26 @@ export class Teacher {
   @PrimaryGeneratedColumn('uuid')
   id: string;
 
-  @OneToOne(() => User, (user) => user.employee, {
+  @Column()
+  userId: string;
+
+  @Column()
+  orgId: string;
+
+  @OneToOne(() => User, (user) => user.teacher, {
     onDelete: 'CASCADE',
-    cascade: true,
   })
-  @JoinColumn()
+  @JoinColumn({ name: 'userId' })
   user: User;
 
-  @ManyToOne(() => Organization, (org) => org.employees, {
+  @ManyToOne(() => Organization, (org) => org.teachers, {
     onDelete: 'CASCADE',
   })
+  @JoinColumn({ name: 'orgId' })
   organization: Organization;
+
+  @OneToMany('Class', 'teacher')
+  classes: Class[];
 
   @Column()
   jobTitle: string;

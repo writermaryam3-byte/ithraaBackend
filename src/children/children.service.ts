@@ -170,6 +170,32 @@ export class ChildrenService {
     return { children, count };
   }
 
+  async findAllByOrganization(orgId: string) {
+    const organization = await this.organizationsService.findOneOrFail(orgId);
+
+    const children = await this.childrenRepository.find({
+      where: { organization },
+      relations: ['class'],
+    });
+
+    return {
+      children: children.map((child) => {
+        const evaluationStatus =
+          child.attemptsUsed > 0 ? 'تم التقيم' : 'لم يتم التقيم';
+        const evaluationStatusClassName =
+          child.attemptsUsed > 0 ? 'text-emerald-600' : '';
+        return {
+          id: child.id,
+          name: child.name,
+          className: child.class.name,
+          imgSrc: '/avatar-placeholder.svg',
+          evaluationStatus,
+          evaluationStatusClassName,
+        };
+      }),
+    };
+  }
+
   async findByUser(userId: string) {
     const [children, count] = await this.childrenRepository.findAndCount({
       where: { user: { id: userId } },

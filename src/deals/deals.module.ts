@@ -1,0 +1,32 @@
+import { Module } from '@nestjs/common';
+import { TypeOrmModule } from '@nestjs/typeorm';
+import { NotificationsModule } from 'src/notifications/notifications.module';
+import { Organization } from 'src/organizations/entities/organization.entity';
+import { Teacher } from 'src/users/entities/teacher.entity';
+import { User } from 'src/users/entities/user.entity';
+import { ActivitiesController } from './activities.controller';
+import { ActivitiesService } from './activities.service';
+import { DealsController } from './deals.controller';
+import { DealsService } from './deals.service';
+import { ProposalsController } from './proposals.controller';
+import { Activity } from './entities/activity.entity';
+import { Deal } from './entities/deal.entity';
+import { Proposal } from './entities/proposal.entity';
+import { IsFutureDateConstraint } from './dto/create-deal.dto';
+
+@Module({
+  imports: [
+    TypeOrmModule.forFeature([
+      Deal,
+      Proposal,
+      Activity,
+      User,
+      Organization,
+      Teacher,
+    ]),
+    NotificationsModule,
+  ],
+  controllers: [DealsController, ProposalsController, ActivitiesController],
+  providers: [DealsService, ActivitiesService, IsFutureDateConstraint],
+})
+export class DealsModule {}

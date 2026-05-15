@@ -52,6 +52,12 @@ export class ChildrenController {
     return this.childrenService.findByUser(userId);
   }
 
+  @Get('organization/:orgId')
+  @ApiOperation({ summary: 'Get all children for specific org' })
+  findAllByUser(@Param('orgId', new ParseUUIDPipe()) orgId: string) {
+    return this.childrenService.findAllByOrganization(orgId);
+  }
+
   @Get(':id')
   @ApiOperation({ summary: 'Get child data' })
   findOne(@Param('id', new ParseUUIDPipe()) id: string) {

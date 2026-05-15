@@ -8,7 +8,6 @@ import {
   ParseUUIDPipe,
 } from '@nestjs/common';
 import { UserRole } from 'src/common/enums/role.enum';
-import { CreateTeacherDto } from '../dto/create-teacher.dto';
 import { TeachersProvider } from '../services/teachers.provider';
 import { Roles } from '../decorators/role.decorator';
 import { UsersService } from '../services/users.service';
@@ -60,8 +59,8 @@ export class UsersController {
     return this.usersService.remove(id);
   }
 
-  @Post('teachers')
-  createTeacher(@Body() createTeacherDto: CreateTeacherDto) {
-    return this.teachersProvider.create(createTeacherDto);
-  }
+  // @Post('teachers')
+  // createTeacher(@Body() createTeacherDto: CreateTeacherDto) {
+  //   return this.teachersProvider.create(createTeacherDto);
+  // }
 }

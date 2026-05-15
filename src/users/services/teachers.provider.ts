@@ -3,7 +3,6 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { CreateTeacherDto } from '../dto/create-teacher.dto';
 import { UserRole } from 'src/common/enums/role.enum';
 import { DataSource, Repository } from 'typeorm';
 import { Teacher } from '../entities/teacher.entity';
@@ -12,6 +11,10 @@ import { AuthProvider } from './auth.provider';
 import { UsersService } from './users.service';
 import { UpdateTeacherDto } from '../dto/update-teacher.dto';
 import { Organization } from 'src/organizations/entities/organization.entity';
+import { OrganizationsService } from 'src/organizations/organizations.service';
+import { ITeacherResponseDto } from '../dto/teachersDtos/teacher-response.dto';
+import { CreateTeacherDto } from '../dto/teachersDtos/create-teacher.dto';
+import { JwtRequestUser } from 'src/common/interfaces/jwt-request-user.interface';
 
 @Injectable()
 export class TeachersProvider {
@@ -19,16 +22,20 @@ export class TeachersProvider {
     private readonly dataSource: DataSource,
     private readonly usersService: UsersService,
     private readonly authService: AuthProvider,
+    private readonly orgService: OrganizationsService,
     @InjectRepository(Teacher)
     private teacherRepo: Repository<Teacher>,
   ) {}
-  async create(dto: CreateTeacherDto) {
+  async create(dto: CreateTeacherDto, currentUser: JwtRequestUser) {
     return this.dataSource.transaction(async (manager) => {
       const isExits = await this.authService.isAlreadyExits(
         dto.phone,
         dto.email,
       );
-      if (isExits) throw new ConflictException('employee already exits');
+      if (isExits) throw new ConflictException('teacher already exits');
+      const organization = await this.orgService.findByOwner(
+        currentUser.userId,
+      );
       const user = await this.usersService.create(
         {
           name: dto.name,
@@ -42,7 +49,7 @@ export class TeachersProvider {
 
       const teacher = manager.create(Teacher, {
         jobTitle: dto.jobTitle,
-        organization: { id: dto.organizationId },
+        organization,
         user,
       });
 
@@ -75,5 +82,40 @@ export class TeachersProvider {
     if (updateTeacherDto.name) teacher.user.name = updateTeacherDto.name;
 
     return this.dataSource.getRepository(Teacher).save(teacher);
+  }
+
+  async findAllByOrganization(organizationId: string): Promise<{
+    teachers: ITeacherResponseDto[];
+  }> {
+    const organization = await this.dataSource
+      .getRepository(Organization)
+      .findOne({
+        where: { id: organizationId },
+      });
+    if (!organization) {
+      throw new NotFoundException('Organization not found');
+    }
+
+    const teachers = await this.teacherRepo.find({
+      where: { organization: { id: organizationId } },
+      relations: ['user', 'organization', 'classes'],
+    });
+
+    return {
+      teachers: teachers.map((t) => {
+        return {
+          email: t.user.email,
+          phone: t.user.phone,
+          classes: t.classes.map((c) => c.name),
+          id: t.user.id,
+          isEmailVerified: t.user.isEmailVerified,
+          isPhoneVerified: t.user.isPhoneVerified,
+          jobTitle: t.jobTitle,
+          name: t.user.name,
+          organizationId: t.organization.id,
+          organizationName: t.organization.organizationName,
+        };
+      }),
+    };
   }
 }

@@ -12,12 +12,15 @@ import { UpdateUserDto } from '../dto/update-user.dto';
 import { IUserResponseDto } from '../dto/user-response.dto';
 import { Role } from '../entities/user-roles.entity';
 import { User } from '../entities/user.entity';
+import { Teacher } from '../entities/teacher.entity';
 
 @Injectable()
 export class UsersService {
   constructor(
     @InjectRepository(User)
     private userRepo: Repository<User>,
+    @InjectRepository(Teacher)
+    private teacherRepo: Repository<Teacher>,
     @InjectRepository(Role)
     private roleRepo: Repository<Role>,
   ) {}
@@ -85,6 +88,12 @@ export class UsersService {
   async findById(id: string) {
     const user = await this.userRepo.findOneBy({ id });
     if (!user) throw new NotFoundException('user not found');
+    return user;
+  }
+  async findTeacher(id: string) {
+    const user = await this.teacherRepo.findOne({ where: { user: { id } } });
+    if (!user)
+      throw new NotFoundException(`teacher with this id ${id} isn't found`);
     return user;
   }
   async findByPhone(phone: string) {

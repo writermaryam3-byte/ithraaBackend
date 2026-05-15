@@ -22,6 +22,7 @@ import { EnrichersService } from './services/enrichers.service';
 import { Enricher } from './entities/enricher.entity';
 import { EnrichersController } from './controllers/enrichers.controller';
 import { NotificationsModule } from 'src/notifications/notifications.module';
+import { OrganizationsModule } from 'src/organizations/organizations.module';
 
 @Module({
   controllers: [
@@ -43,6 +44,7 @@ import { NotificationsModule } from 'src/notifications/notifications.module';
   imports: [
     TypeOrmModule.forFeature([User, Role, Teacher, Enricher]),
     MailerModule,
+    OrganizationsModule,
     SessionModule,
     PassportModule,
     forwardRef(() => NotificationsModule),

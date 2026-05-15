@@ -7,6 +7,7 @@ import {
   Param,
   Delete,
   ParseUUIDPipe,
+  Req,
 } from '@nestjs/common';
 import { ClassesService } from './classes.service';
 import { CreateClassDto } from './dto/create-class.dto';
@@ -19,6 +20,7 @@ import {
   ApiResponse,
   ApiTags,
 } from '@nestjs/swagger';
+import { type AuthRequest } from 'src/common/interfaces/auth-request.interface';
 
 @ApiTags('classes')
 @ApiBearerAuth()
@@ -30,8 +32,8 @@ export class ClassesController {
   @ApiResponse({ status: 201, description: 'class created successfully' })
   @Roles(UserRole.ORGANIZATIONOWNER)
   @Post()
-  create(@Body() createClassDto: CreateClassDto) {
-    return this.classesService.create(createClassDto);
+  create(@Body() createClassDto: CreateClassDto, @Req() req: AuthRequest) {
+    return this.classesService.create(createClassDto, req.user);
   }
 
   @ApiOperation({ summary: 'Get all classes' })
@@ -39,6 +41,12 @@ export class ClassesController {
   @Get()
   findAll() {
     return this.classesService.findAll();
+  }
+
+  @ApiOperation({ summary: 'Get all CLASSES in ORG' })
+  @Get('organization/:orgId')
+  findClassesByOrg(@Param('orgId', new ParseUUIDPipe()) orgId: string) {
+    return this.classesService.findClassesByOrg(orgId);
   }
 
   @ApiOperation({ summary: 'Get all children in class' })

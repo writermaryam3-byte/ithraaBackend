@@ -24,14 +24,22 @@ export class OrganizationsService {
 
   async findOneOrFail(id: string) {
     const org = await this.organizationRepository.findOneBy({ id });
-    if (!org) throw new NotFoundException('organization not found');
+    if (!org)
+      throw new NotFoundException(
+        `organization with this id ${id} is not found`,
+      );
     return org;
   }
 
-  findByOwner(ownerId: string) {
-    return this.organizationRepository.findOne({
+  async findByOwner(ownerId: string) {
+    const org = await this.organizationRepository.findOne({
       where: { owner: { id: ownerId } },
     });
+    if (!org)
+      throw new NotFoundException(
+        `organization for this owner with ${ownerId} is not found`,
+      );
+    return org;
   }
 
   update(id: string, updateOrganizationDto: UpdateOrganizationDto) {

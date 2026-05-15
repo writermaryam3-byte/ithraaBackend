@@ -163,7 +163,7 @@ export class AuthProvider {
       );
 
       const enricher = manager.create(Enricher, {
-        organization_name: dto.organizationName,
+        organizationName: dto.organizationName,
         user,
       });
 

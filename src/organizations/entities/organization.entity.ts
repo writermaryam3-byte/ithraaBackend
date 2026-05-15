@@ -1,7 +1,8 @@
+import { Class } from 'src/classes/entities/class.entity';
 import { ApprovalStatus } from 'src/common/enums/approval-status.enum';
 import { OrganizationType } from 'src/common/enums/organization-type.enum';
-import { Employee } from 'src/employees/entities/employee.entity';
 import { Grade } from 'src/grades/entities/grade.entity';
+import { Teacher } from 'src/users/entities/teacher.entity';
 import { User } from 'src/users/entities/user.entity';
 import {
   Entity,
@@ -34,12 +35,15 @@ export class Organization {
   approvalStatus: ApprovalStatus;
 
   @OneToOne(() => User, (user) => user.organization, { onDelete: 'CASCADE' })
-  @JoinColumn()
+  @JoinColumn({ name: 'ownerId' })
   owner: User;
 
-  @OneToMany(() => Employee, (emp) => emp.organization)
-  employees: Employee[];
+  @OneToMany(() => Teacher, (teacher) => teacher.organization)
+  teachers: Teacher[];
 
   @OneToMany(() => Grade, (grade) => grade.organization)
   grades: Grade[];
+
+  @OneToMany(() => Class, (cls) => cls.organization)
+  classes: Class[];
 }

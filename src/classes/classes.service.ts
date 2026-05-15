@@ -8,29 +8,46 @@ import { AdminClassResponse } from './dto/admin-class-response.dto';
 import { GradesService } from 'src/grades/grades.service';
 import { OrgOwnerClassResponse } from './dto/orgOwner-class-response.dto';
 import { ChildrenService } from 'src/children/children.service';
+import { Teacher } from 'src/users/entities/teacher.entity';
+import { OrganizationsService } from 'src/organizations/organizations.service';
+import { JwtRequestUser } from 'src/common/interfaces/jwt-request-user.interface';
 
 @Injectable()
 export class ClassesService {
   constructor(
     @InjectRepository(Class)
     private readonly classesRepo: Repository<Class>,
+    @InjectRepository(Teacher)
+    private readonly teacherRepo: Repository<Teacher>,
     private readonly gradesService: GradesService,
     private readonly childrenService: ChildrenService,
+    private readonly orgService: OrganizationsService,
   ) {}
-  async create(createClassDto: CreateClassDto) {
-    const grade = await this.gradesService.findOne(createClassDto.gradeId);
-    const cls = await this.classesRepo.save({
-      ...createClassDto,
+  async create(createClassDto: CreateClassDto, currentUser: JwtRequestUser) {
+    const { gradeId, teacherId, name } = createClassDto;
+    const grade = await this.gradesService.findOne(gradeId);
+    const organization = await this.orgService.findByOwner(currentUser.userId);
+    const cls = this.classesRepo.create({
+      name,
       grade,
+      organization,
     });
-    return cls;
+    if (teacherId) {
+      const teacher = await this.teacherRepo.findOne({
+        where: { id: teacherId },
+      });
+      if (!teacher) {
+        throw new NotFoundException(`Teacher with ID ${teacherId} not found`);
+      }
+      cls.teacher = teacher;
+    }
+    return this.classesRepo.save(cls);
   }
 
   async findAll(): Promise<AdminClassResponse[]> {
     const classes = await this.classesRepo.find({
       relations: { grade: { organization: true } },
     });
-    console.log(classes);
     return classes.map((cls) => ({
       id: cls.id,
       gradeName: cls.grade.name,
@@ -43,7 +60,7 @@ export class ClassesService {
   async findOne(id: string): Promise<OrgOwnerClassResponse> {
     const cls = await this.classesRepo.findOne({
       where: { id },
-      relations: ['grade', 'children'],
+      relations: ['grade', 'children', 'teacher'],
     });
     if (!cls) throw new NotFoundException(`class with ID ${id} not found`);
     return {
@@ -51,6 +68,24 @@ export class ClassesService {
       id: cls.id,
       name: cls.name,
       children: cls.children,
+    };
+  }
+
+  async findClassesByOrg(orgId: string) {
+    const org = await this.orgService.findOneOrFail(orgId);
+    const classes = await this.classesRepo.find({
+      where: { organization: { id: org.id } },
+      relations: { grade: { organization: true }, children: true },
+    });
+
+    return {
+      classes: classes.map((cls) => ({
+        id: cls.id,
+        gradeName: cls.grade.name,
+        childrenCount: cls.children.length,
+        name: cls.name,
+        organizationName: cls.grade.organization.organizationName,
+      })),
     };
   }
   async findOneOrFail(id: string) {
@@ -61,14 +96,24 @@ export class ClassesService {
 
   async update(id: string, updateClassDto: UpdateClassDto) {
     const cls = await this.findOneOrFail(id);
+    const { gradeId, teacherId, ...rest } = updateClassDto;
 
-    if (updateClassDto.gradeId) {
-      const grade = await this.gradesService.findOneOrFail(cls.grade.id);
-
+    if (gradeId) {
+      const grade = await this.gradesService.findOneOrFail(gradeId);
       cls.grade = grade;
     }
 
-    Object.assign(cls, updateClassDto);
+    Object.assign(cls, rest);
+
+    if (teacherId) {
+      const teacher = await this.teacherRepo.findOne({
+        where: { id: teacherId },
+      });
+      if (!teacher) {
+        throw new NotFoundException(`Teacher with ID ${teacherId} not found`);
+      }
+      cls.teacher = teacher;
+    }
 
     return await this.classesRepo.save(cls);
   }

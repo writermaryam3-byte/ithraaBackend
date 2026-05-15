@@ -1,6 +1,5 @@
 import { Exclude } from 'class-transformer';
 import { Child } from 'src/children/entities/child.entity';
-import { Employee } from 'src/employees/entities/employee.entity';
 import { Organization } from 'src/organizations/entities/organization.entity';
 import {
   Entity,
@@ -15,6 +14,7 @@ import {
 } from 'typeorm';
 import { Role } from './user-roles.entity';
 import { Enricher } from './enricher.entity';
+import { Teacher } from './teacher.entity';
 
 @Entity('users')
 export class User {
@@ -50,8 +50,8 @@ export class User {
   @OneToOne(() => Enricher, (enricher) => enricher.user)
   enricher: Enricher;
 
-  @OneToOne(() => Employee, (employee) => employee.user)
-  employee: Employee;
+  @OneToOne(() => Teacher, (teacher) => teacher.user)
+  teacher: Teacher;
 
   @OneToMany(() => Child, (child) => child.user)
   children: Child[];

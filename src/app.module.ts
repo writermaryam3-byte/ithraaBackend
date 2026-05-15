@@ -5,7 +5,6 @@ import { ChildrenModule } from './children/children.module';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { UsersModule } from './users/users.module';
 import { OrganizationsModule } from './organizations/organizations.module';
-import { EmployeesModule } from './employees/employees.module';
 import { TestsModule } from './tests/tests.module';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { SessionModule } from './session/session.module';
@@ -23,6 +22,7 @@ import { EventEmitterModule } from '@nestjs/event-emitter';
 import { EvaluationsModule } from 'src/evaluations/evaluations.module';
 import { ScheduleModule } from '@nestjs/schedule';
 import { PaymentsModule } from 'src/payments/payments.module';
+import { DealsModule } from 'src/deals/deals.module';
 
 @Module({
   imports: [
@@ -59,9 +59,7 @@ import { PaymentsModule } from 'src/payments/payments.module';
     }),
     UsersModule,
     OrganizationsModule,
-    EmployeesModule,
     TestsModule,
-    // AuthModule,
     SessionModule,
     UploadsModule,
     MailerModule,
@@ -70,6 +68,7 @@ import { PaymentsModule } from 'src/payments/payments.module';
     NotificationsModule,
     EvaluationsModule,
     PaymentsModule,
+    DealsModule,
   ],
   controllers: [AppController],
   providers: [
