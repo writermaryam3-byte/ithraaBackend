@@ -39,7 +39,7 @@ export class Child {
     onDelete: 'CASCADE',
   })
   @JoinColumn({ name: 'classId' })
-  class: Class;
+  class: Class | null;
 
   @ManyToOne(() => User, (user) => user.children, { onDelete: 'CASCADE' })
   @JoinColumn({ name: 'userId' })

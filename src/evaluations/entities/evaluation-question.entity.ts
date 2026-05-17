@@ -9,6 +9,7 @@ import {
 } from 'typeorm';
 import { Evaluation } from './evaluation.entity';
 import { EvaluationQuestionAnswer } from './evaluation-question-answer.entity';
+import { EvaluationDimension } from './evaluation-dimension.entity';
 
 @Entity('evaluation_questions')
 export class EvaluationQuestion {
@@ -22,6 +23,17 @@ export class EvaluationQuestion {
   @ManyToOne(() => Evaluation, (e) => e.questions, { onDelete: 'CASCADE' })
   @JoinColumn({ name: 'evaluationId' })
   evaluation: Evaluation;
+
+  @Index()
+  @Column({ type: 'uuid' })
+  evaluationDimensionId: string;
+
+  @ManyToOne(() => EvaluationDimension, (ed) => ed.questions, {
+    onDelete: 'CASCADE',
+    nullable: false,
+  })
+  @JoinColumn({ name: 'evaluationDimensionId' })
+  evaluationDimension: EvaluationDimension;
 
   @Column({ type: 'text' })
   content: string;

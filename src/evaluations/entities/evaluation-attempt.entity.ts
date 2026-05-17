@@ -76,4 +76,7 @@ export class EvaluationAttempt {
 
   @OneToOne(() => EvaluationApproval, (ap) => ap.attempt, { nullable: true })
   approval: EvaluationApproval | null;
+
+  @Column({ type: 'jsonb', nullable: true })
+  result: Record<string, unknown> | null;
 }

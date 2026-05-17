@@ -31,7 +31,8 @@ export class EvaluationsController {
   @Roles(UserRole.ADMIN)
   @Post()
   @ApiOperation({
-    summary: 'Create an evaluation with questions and answers (admin)',
+    summary:
+      'Create an evaluation with dimensions, questions and scored answers',
   })
   create(@Body() dto: CreateEvaluationDto, @Req() req: AuthRequest) {
     const user = req.user as unknown as JwtRequestUser;
@@ -43,7 +44,7 @@ export class EvaluationsController {
 
   @Roles(UserRole.ADMIN)
   @Get()
-  @ApiOperation({ summary: 'Get all evaluations (admin)' })
+  @ApiOperation({ summary: 'Get all evaluations for admin' })
   getAll(@Req() req: AuthRequest) {
     const user = req.user as unknown as JwtRequestUser;
     return this.service.getAllEvaluationsForAdmin({
@@ -52,10 +53,24 @@ export class EvaluationsController {
     });
   }
 
+  // @Roles(UserRole.PARENT)
+  @Get('available/:childId')
+  @ApiOperation({ summary: 'Get available evaluations for a child by age' })
+  getAvailableForChild(
+    @Param('childId', new ParseUUIDPipe()) childId: string,
+    @Req() req: AuthRequest,
+  ) {
+    const user = req.user as unknown as JwtRequestUser;
+    return this.service.getAvailableEvaluationsForChild(childId, {
+      userId: user.userId,
+      roles: user.roles.map((r) => r.name),
+    });
+  }
+
   @Roles(UserRole.ADMIN)
   @Get(':id/details')
   @ApiOperation({
-    summary: 'Get evaluation details with questions/answers (admin)',
+    summary: 'Get evaluation details with scoring data for admin',
   })
   getDetails(
     @Param('id', new ParseUUIDPipe()) evaluationId: string,
@@ -68,9 +83,25 @@ export class EvaluationsController {
     });
   }
 
+  @Roles(UserRole.PARENT, UserRole.ADMIN)
+  @Get(':id/form')
+  @ApiOperation({
+    summary: 'Get evaluation form without exposing score values',
+  })
+  getForm(
+    @Param('id', new ParseUUIDPipe()) evaluationId: string,
+    @Req() req: AuthRequest,
+  ) {
+    const user = req.user as unknown as JwtRequestUser;
+    return this.service.getEvaluationForm(evaluationId, {
+      userId: user.userId,
+      roles: user.roles.map((r) => r.name),
+    });
+  }
+
   @Roles(UserRole.PARENT)
   @Post(':id/start')
-  @ApiOperation({ summary: 'Start an evaluation attempt for a child (parent)' })
+  @ApiOperation({ summary: 'Start an evaluation attempt for a child' })
   start(
     @Param('id', new ParseUUIDPipe()) evaluationId: string,
     @Body() dto: StartEvaluationDto,

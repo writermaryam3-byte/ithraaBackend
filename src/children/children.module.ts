@@ -13,6 +13,7 @@ import { OrganizationsModule } from 'src/organizations/organizations.module';
 import { UsersModule } from 'src/users/users.module';
 import { NotificationsModule } from 'src/notifications/notifications.module';
 import { PaymentsModule } from 'src/payments/payments.module';
+import { ClassesModule } from 'src/classes/classes.module';
 
 @Module({
   controllers: [
@@ -29,14 +30,11 @@ import { PaymentsModule } from 'src/payments/payments.module';
       ChildPrivateAttempt,
     ]),
     OrganizationsModule,
+    forwardRef(() => ClassesModule),
     UsersModule,
     NotificationsModule,
     forwardRef(() => PaymentsModule),
   ],
-  exports: [
-    TypeOrmModule,
-    ChildrenService,
-    PrivateChildAttemptsService,
-  ],
+  exports: [TypeOrmModule, ChildrenService, PrivateChildAttemptsService],
 })
 export class ChildrenModule {}

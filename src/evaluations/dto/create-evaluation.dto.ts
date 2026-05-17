@@ -2,7 +2,7 @@ import { Type } from 'class-transformer';
 import {
   ArrayMinSize,
   IsArray,
-  IsBoolean,
+  IsEnum,
   IsNotEmpty,
   IsNumber,
   IsOptional,
@@ -13,23 +13,58 @@ import {
   ValidateNested,
 } from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
+import { EvaluationType } from '../enums/evaluation-type.enum';
+
+export class CreateEvaluationDimensionDto {
+  @ApiProperty({ example: 'الذكاء اللغوي' })
+  @IsString()
+  @IsNotEmpty()
+  name: string;
+
+  @ApiProperty({ example: 'linguistic' })
+  @IsString()
+  @IsNotEmpty()
+  code: string;
+
+  @ApiProperty({ example: 3 })
+  @IsNumber()
+  minScore: number;
+
+  @ApiProperty({ example: 12 })
+  @IsNumber()
+  maxScore: number;
+
+  @ApiProperty({ required: false })
+  @IsOptional()
+  interpretationRules?: Record<string, any>;
+}
 
 export class CreateEvaluationQuestionAnswerDto {
-  @ApiProperty({ example: 'Option A' })
+  @ApiProperty({ example: 'تنطبق بدرجة عالية' })
   @IsString()
   @IsNotEmpty()
   text: string;
 
-  @ApiProperty({ example: false, default: false })
-  @IsBoolean()
-  isCorrect: boolean;
+  @ApiProperty({ example: 4 })
+  @IsNumber()
+  scoreValue: number;
+
+  @ApiProperty({ example: 'A', required: false })
+  @IsOptional()
+  @IsString()
+  code?: string;
 }
 
 export class CreateEvaluationQuestionDto {
-  @ApiProperty({ example: 'What is 2 + 2?' })
+  @ApiProperty({ example: 'لدى طفلي فضول يدفعه لفتح الكتب أو طلب القراءة له' })
   @IsString()
   @IsNotEmpty()
   content: string;
+
+  @ApiProperty({ example: 'linguistic' })
+  @IsString()
+  @IsNotEmpty()
+  dimensionCode: string;
 
   @ApiProperty({ example: 1, required: false, default: 1 })
   @IsOptional()
@@ -46,14 +81,43 @@ export class CreateEvaluationQuestionDto {
 }
 
 export class CreateEvaluationDto {
-  @ApiProperty({ example: 'Math Evaluation - Grade 1' })
+  @ApiProperty({ example: 'مؤشر الذكاءات الثمانية' })
   @IsString()
   @MinLength(2)
   title: string;
 
-  @ApiProperty({ format: 'uuid', example: 'f120dbc5-4fab-480c-af01-eac3b3942fc6' })
+  @ApiProperty({ enum: EvaluationType })
+  @IsEnum(EvaluationType)
+  type: EvaluationType;
+
+  @ApiProperty({ format: 'uuid' })
   @IsUUID()
   institutionId: string;
+
+  @ApiProperty({ example: 3, required: false })
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  ageFrom?: number;
+
+  @ApiProperty({ example: 15, required: false })
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  ageTo?: number;
+
+  @ApiProperty({ example: ['parent', 'teacher'], required: false })
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
+  evaluatorTypes?: string[];
+
+  @ApiProperty({ type: [CreateEvaluationDimensionDto] })
+  @IsArray()
+  @ArrayMinSize(1)
+  @ValidateNested({ each: true })
+  @Type(() => CreateEvaluationDimensionDto)
+  dimensions: CreateEvaluationDimensionDto[];
 
   @ApiProperty({ type: [CreateEvaluationQuestionDto] })
   @IsArray()
@@ -62,4 +126,3 @@ export class CreateEvaluationDto {
   @Type(() => CreateEvaluationQuestionDto)
   questions: CreateEvaluationQuestionDto[];
 }
-

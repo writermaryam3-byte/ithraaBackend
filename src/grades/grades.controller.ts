@@ -7,6 +7,7 @@ import {
   Param,
   Delete,
   ParseUUIDPipe,
+  Req,
 } from '@nestjs/common';
 import { GradesService } from './grades.service';
 import { CreateGradeDto } from './dto/create-grade.dto';
@@ -14,6 +15,7 @@ import { UpdateGradeDto } from './dto/update-grade.dto';
 import { Roles } from 'src/users/decorators/role.decorator';
 import { UserRole } from 'src/common/enums/role.enum';
 import { ApiTags, ApiBearerAuth, ApiOperation } from '@nestjs/swagger';
+import { type AuthRequest } from 'src/common/interfaces/auth-request.interface';
 @ApiTags('grades')
 @ApiBearerAuth()
 @Controller('grades')
@@ -40,6 +42,16 @@ export class GradesController {
     return this.gradesService.findOne(id);
   }
 
+  @Roles(UserRole.ORGANIZATIONOWNER, UserRole.ADMIN, UserRole.TEACHER)
+  @Get('organization/:orgId')
+  @ApiOperation({ summary: 'Get all grades for a specific org' })
+  findAllByOrganization(
+    @Param('orgId', new ParseUUIDPipe()) orgId: string,
+    @Req() req: AuthRequest,
+  ) {
+    return this.gradesService.findAllByOrganization(orgId, req.user);
+  }
+
   @Patch(':id')
   update(
     @Param('id', new ParseUUIDPipe()) id: string,
@@ -50,6 +62,6 @@ export class GradesController {
 
   @Delete(':id')
   remove(@Param('id', new ParseUUIDPipe()) id: string) {
-    return this.gradesService.remove(+id);
+    return this.gradesService.remove(id);
   }
 }

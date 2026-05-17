@@ -1,10 +1,10 @@
 import {
   Entity,
   PrimaryGeneratedColumn,
+  Index,
   Column,
   ManyToOne,
   JoinColumn,
-  Index,
 } from 'typeorm';
 import { EvaluationQuestion } from './evaluation-question.entity';
 
@@ -26,6 +26,12 @@ export class EvaluationQuestionAnswer {
   @Column({ type: 'text' })
   text: string;
 
-  @Column({ type: 'boolean', default: false })
-  isCorrect: boolean;
+  @Column('float')
+  scoreValue: number;
+
+  @Column({ type: 'varchar', length: 50, nullable: true })
+  code: string | null;
+
+  @Column({ type: 'int', default: 1 })
+  order: number;
 }

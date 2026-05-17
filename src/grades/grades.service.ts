@@ -1,4 +1,8 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import {
+  Injectable,
+  NotFoundException,
+  UnauthorizedException,
+} from '@nestjs/common';
 import { CreateGradeDto } from './dto/create-grade.dto';
 import { UpdateGradeDto } from './dto/update-grade.dto';
 import { Grade } from './entities/grade.entity';
@@ -6,6 +10,7 @@ import { Repository } from 'typeorm';
 import { InjectRepository } from '@nestjs/typeorm';
 import { AdminGradeResponseDto } from './dto/admin-grade-response.dto';
 import { OrganizationsService } from 'src/organizations/organizations.service';
+import { JwtRequestUser } from 'src/common/interfaces/jwt-request-user.interface';
 
 @Injectable()
 export class GradesService {
@@ -48,12 +53,50 @@ export class GradesService {
     return grade;
   }
 
+  async findAllByOrganization(orgId: string, currentUser: JwtRequestUser) {
+    const organization = await this.organizationsService.findOneOrFail(orgId);
+
+    if (
+      !(await this.organizationsService.isOrgMember(currentUser.userId, orgId))
+    ) {
+      throw new UnauthorizedException(
+        "you aren't allowed to access these data",
+      );
+    }
+
+    const grades = await this.gradeRepo.find({
+      where: { organization },
+      relations: { classes: { children: true } },
+    });
+
+    return {
+      grades: grades.map((grade) => {
+        return {
+          id: grade.id,
+          name: grade.name,
+          classes: grade.classes.map((cls) => ({
+            id: cls.id,
+            name: cls.name,
+          })),
+          childrenCount: grade.classes.reduce(
+            (accu, curr) => accu + curr.children.length,
+            0,
+          ),
+        };
+      }),
+    };
+  }
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   update(id: number, updateGradeDto: UpdateGradeDto) {
     return `This action updates a #${id} grade`;
   }
 
-  remove(id: number) {
-    return `This action removes a #${id} grade`;
+  async remove(id: string): Promise<void> {
+    const result = await this.gradeRepo.delete(id);
+    // eslint-disable-next-line prettier/prettier
+  
+    if (result.affected === 0) {
+      throw new NotFoundException('Grade not found');
+    }
   }
 }

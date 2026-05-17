@@ -1,5 +1,6 @@
 export interface ITeacherResponseDto {
-  id: string;
+  teacherId: string;
+  userId: string;
   name: string;
   email: string;
   isEmailVerified: boolean;

@@ -8,6 +8,9 @@ import {
   Unique,
 } from 'typeorm';
 import { EvaluationAttempt } from './evaluation-attempt.entity';
+import { EvaluationQuestion } from './evaluation-question.entity';
+import { EvaluationQuestionAnswer } from './evaluation-question-answer.entity';
+import { EvaluationDimension } from './evaluation-dimension.entity';
 
 @Entity('evaluation_answers')
 @Unique('uq_attempt_question', ['attemptId', 'questionId'])
@@ -23,12 +26,30 @@ export class EvaluationAnswer {
   @JoinColumn({ name: 'attemptId' })
   attempt: EvaluationAttempt;
 
+  @Index()
   @Column({ type: 'uuid' })
   questionId: string;
 
-  @Column({ type: 'text' })
-  answer: string;
+  @ManyToOne(() => EvaluationQuestion, { onDelete: 'CASCADE' })
+  @JoinColumn({ name: 'questionId' })
+  question: EvaluationQuestion;
 
-  @Column({ type: 'boolean', nullable: true })
-  isCorrect: boolean | null;
+  @Index()
+  @Column({ type: 'uuid' })
+  selectedAnswerId: string;
+
+  @ManyToOne(() => EvaluationQuestionAnswer, { onDelete: 'CASCADE' })
+  @JoinColumn({ name: 'selectedAnswerId' })
+  selectedAnswer: EvaluationQuestionAnswer;
+
+  @Index()
+  @Column({ type: 'uuid' })
+  evaluationDimensionId: string;
+
+  @ManyToOne(() => EvaluationDimension, { onDelete: 'CASCADE' })
+  @JoinColumn({ name: 'evaluationDimensionId' })
+  evaluationDimension: EvaluationDimension;
+
+  @Column('float')
+  scoreValue: number;
 }

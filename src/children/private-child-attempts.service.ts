@@ -65,10 +65,7 @@ export class PrivateChildAttemptsService {
       },
       order: { createdAt: 'DESC' },
     });
-    if (
-      existing &&
-      existing.status !== ChildPrivateAttemptStatus.COMPLETED
-    ) {
+    if (existing && existing.status !== ChildPrivateAttemptStatus.COMPLETED) {
       return existing;
     }
 
@@ -102,10 +99,7 @@ export class PrivateChildAttemptsService {
         evaluationAttemptId: IsNull(),
       },
     });
-    if (
-      open &&
-      open.status !== ChildPrivateAttemptStatus.COMPLETED
-    ) {
+    if (open && open.status !== ChildPrivateAttemptStatus.COMPLETED) {
       await this.notifyRetakeRequested(parentId, child.name);
       return open;
     }
@@ -172,7 +166,10 @@ export class PrivateChildAttemptsService {
     return saved;
   }
 
-  async adminApproveExtraAttempt(privateAttemptId: string, adminUserId: string) {
+  async adminApproveExtraAttempt(
+    privateAttemptId: string,
+    adminUserId: string,
+  ) {
     void adminUserId;
     const attempt = await this.privateAttempts.findOne({
       where: { id: privateAttemptId },
@@ -342,7 +339,9 @@ export class PrivateChildAttemptsService {
   }
 
   @OnEvent(PAYMENT_EVENTS.SUCCESS)
-  async handlePaymentSuccess(payload: PaymentSuccessEventPayload): Promise<void> {
+  async handlePaymentSuccess(
+    payload: PaymentSuccessEventPayload,
+  ): Promise<void> {
     const privateId = payload.metadata.privateAttemptId;
     if (!privateId || typeof privateId !== 'string') return;
 

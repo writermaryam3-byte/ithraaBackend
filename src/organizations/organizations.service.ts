@@ -42,6 +42,25 @@ export class OrganizationsService {
     return org;
   }
 
+  async isOrgMember(userId: string, orgId: string): Promise<boolean> {
+    const org = await this.organizationRepository.findOne({
+      where: { id: orgId },
+      relations: ['owner', 'teachers'],
+    });
+
+    if (!org) {
+      return false;
+    }
+
+    if (org.owner?.id === userId) {
+      return true;
+    }
+
+    const isTeacher = org.teachers?.some((teacher) => teacher.id === userId);
+
+    return !!isTeacher;
+  }
+
   update(id: string, updateOrganizationDto: UpdateOrganizationDto) {
     return this.organizationRepository.update(id, updateOrganizationDto);
   }

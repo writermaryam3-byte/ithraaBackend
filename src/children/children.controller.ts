@@ -8,6 +8,7 @@ import {
   Delete,
   Query,
   ParseUUIDPipe,
+  Req,
 } from '@nestjs/common';
 import { ChildrenService } from './children.service';
 import { CreateChildWithParentDto } from './dto/create-child.dto';
@@ -15,18 +16,14 @@ import { UpdateChildDto } from './dto/update-child.dto';
 import { UserRole } from 'src/common/enums/role.enum';
 import { Roles } from 'src/users/decorators/role.decorator';
 import { ApiBearerAuth, ApiTags, ApiOperation } from '@nestjs/swagger';
+import type { AuthRequest } from 'src/common/interfaces/auth-request.interface';
 
 @ApiTags('children')
 @ApiBearerAuth()
 @Controller('children')
 export class ChildrenController {
   constructor(private readonly childrenService: ChildrenService) {}
-  // @Roles(
-  //   UserRole.EMPLOYEE,
-  //   UserRole.ORGANIZATIONOWNER,
-  //   UserRole.PARENT,
-  //   UserRole.TEACHER,
-  // )
+  @Roles(UserRole.ORGANIZATIONOWNER, UserRole.PARENT, UserRole.TEACHER)
   @Post()
   @ApiOperation({
     summary:
@@ -35,8 +32,10 @@ export class ChildrenController {
   create(
     @Body()
     createChildWithParentDto: CreateChildWithParentDto,
+    @Req()
+    req: AuthRequest,
   ) {
-    return this.childrenService.create(createChildWithParentDto);
+    return this.childrenService.create(createChildWithParentDto, req.user);
   }
 
   @Roles(UserRole.ADMIN)
@@ -52,10 +51,14 @@ export class ChildrenController {
     return this.childrenService.findByUser(userId);
   }
 
+  @Roles(UserRole.ORGANIZATIONOWNER, UserRole.ADMIN, UserRole.TEACHER)
   @Get('organization/:orgId')
   @ApiOperation({ summary: 'Get all children for specific org' })
-  findAllByUser(@Param('orgId', new ParseUUIDPipe()) orgId: string) {
-    return this.childrenService.findAllByOrganization(orgId);
+  findAllByOrganization(
+    @Param('orgId', new ParseUUIDPipe()) orgId: string,
+    @Req() req: AuthRequest,
+  ) {
+    return this.childrenService.findAllByOrganization(orgId, req.user);
   }
 
   @Get(':id')

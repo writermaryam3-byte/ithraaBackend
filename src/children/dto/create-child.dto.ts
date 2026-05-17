@@ -42,12 +42,13 @@ export class CreateChildDto {
   organizationId?: string;
 
   @ApiProperty({
-    description: 'user ID',
-    example: '44304606-b3f1-49a9-b739-b9e91537b7f3',
+    description: 'class ID',
+    example: '0a7d391a-a4e5-4716-89c3-158a97919c89',
     format: 'uuid',
   })
+  @IsOptional()
   @IsUUID()
-  userId: string;
+  classId?: string;
 }
 
 export class CreateChildWithParentDto {

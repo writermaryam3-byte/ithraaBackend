@@ -1,4 +1,9 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import {
+  forwardRef,
+  Inject,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { CreateClassDto } from './dto/create-class.dto';
 import { UpdateClassDto } from './dto/update-class.dto';
 import { InjectRepository } from '@nestjs/typeorm';
@@ -20,6 +25,7 @@ export class ClassesService {
     @InjectRepository(Teacher)
     private readonly teacherRepo: Repository<Teacher>,
     private readonly gradesService: GradesService,
+    @Inject(forwardRef(() => ChildrenService))
     private readonly childrenService: ChildrenService,
     private readonly orgService: OrganizationsService,
   ) {}
@@ -75,16 +81,25 @@ export class ClassesService {
     const org = await this.orgService.findOneOrFail(orgId);
     const classes = await this.classesRepo.find({
       where: { organization: { id: org.id } },
-      relations: { grade: { organization: true }, children: true },
+      relations: {
+        grade: { organization: true },
+        children: true,
+        teacher: { user: true },
+      },
     });
 
     return {
       classes: classes.map((cls) => ({
         id: cls.id,
         gradeName: cls.grade.name,
+        gradeId: cls.grade.id,
         childrenCount: cls.children.length,
         name: cls.name,
+        teacherId: cls.teacher?.id,
+        teacherName: cls.teacher?.user.name,
         organizationName: cls.grade.organization.organizationName,
+        organizationId: cls.grade.organization.id,
+        children: cls.children.length,
       })),
     };
   }
@@ -92,6 +107,17 @@ export class ClassesService {
     const cls = await this.classesRepo.findOneBy({ id });
     if (!cls) throw new NotFoundException(`class with ID ${id} not found`);
     return cls;
+  }
+
+  async isOrgCls(classId: string, orgId: string): Promise<boolean> {
+    return await this.classesRepo.exist({
+      where: {
+        id: classId,
+        organization: {
+          id: orgId,
+        },
+      },
+    });
   }
 
   async update(id: string, updateClassDto: UpdateClassDto) {

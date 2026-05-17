@@ -3,4 +3,3 @@ export enum EvaluationAttemptStatus {
   SUBMITTED = 'submitted',
   APPROVED = 'approved',
 }
-

@@ -33,4 +33,3 @@ export class StartEvaluationDto {
   @Min(1)
   expiresInSeconds?: number;
 }
-

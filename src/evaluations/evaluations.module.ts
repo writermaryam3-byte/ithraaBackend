@@ -11,6 +11,8 @@ import { EvaluationQuestion } from './entities/evaluation-question.entity';
 import { EvaluationQuestionAnswer } from './entities/evaluation-question-answer.entity';
 import { Child } from 'src/children/entities/child.entity';
 import { ChildrenModule } from 'src/children/children.module';
+import { EvaluationDimension } from './entities/evaluation-dimension.entity';
+import { EvaluationScoringService } from './evaluations-scoring-services.service';
 
 @Module({
   imports: [
@@ -22,10 +24,11 @@ import { ChildrenModule } from 'src/children/children.module';
       EvaluationQuestion,
       EvaluationQuestionAnswer,
       Child,
+      EvaluationDimension,
     ]),
     ChildrenModule,
   ],
   controllers: [EvaluationsController, AttemptsController],
-  providers: [EvaluationsService],
+  providers: [EvaluationsService, EvaluationScoringService],
 })
 export class EvaluationsModule {}

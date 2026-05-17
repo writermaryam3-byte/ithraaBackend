@@ -1,5 +1,10 @@
 import { Type } from 'class-transformer';
-import { ArrayMaxSize, ArrayMinSize, IsArray, ValidateNested } from 'class-validator';
+import {
+  ArrayMaxSize,
+  ArrayMinSize,
+  IsArray,
+  ValidateNested,
+} from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
 import { AttemptAnswerDto } from './attempt-answer.dto';
 
@@ -12,4 +17,3 @@ export class SubmitAttemptDto {
   @Type(() => AttemptAnswerDto)
   answers: AttemptAnswerDto[];
 }
-

@@ -2,8 +2,11 @@ import {
   BadRequestException,
   ConflictException,
   ForbiddenException,
+  forwardRef,
+  Inject,
   Injectable,
   NotFoundException,
+  UnauthorizedException,
 } from '@nestjs/common';
 import { CreateChildWithParentDto } from './dto/create-child.dto';
 import { CreateChildByParentDto } from './dto/create-child-by-parent.dto';
@@ -17,6 +20,8 @@ import { AuthProvider } from 'src/users/services/auth.provider';
 import { UserRole } from 'src/common/enums/role.enum';
 import { NotificationsService } from 'src/notifications/notifications.service';
 import { NotificationDelivery } from 'src/notifications/enums/notification-delivery.enum';
+import { JwtRequestUser } from 'src/common/interfaces/jwt-request-user.interface';
+import { ClassesService } from 'src/classes/classes.service';
 
 @Injectable()
 export class ChildrenService {
@@ -24,6 +29,8 @@ export class ChildrenService {
     @InjectRepository(Child)
     private childrenRepository: Repository<Child>,
     private usersService: UsersService,
+    @Inject(forwardRef(() => ClassesService))
+    private clsService: ClassesService,
     private organizationsService: OrganizationsService,
     private dataSource: DataSource,
     private authService: AuthProvider,
@@ -75,17 +82,33 @@ export class ChildrenService {
     return { children, count };
   }
 
-  async create(createChildWithParentDto: CreateChildWithParentDto) {
+  async create(
+    createChildWithParentDto: CreateChildWithParentDto,
+    currentUser: JwtRequestUser,
+  ) {
     return this.dataSource.transaction(async (manager) => {
       // check organization
-      if (createChildWithParentDto.child.organizationId) {
+      if (
+        createChildWithParentDto.child.organizationId &&
+        createChildWithParentDto.child.classId
+      ) {
         await this.organizationsService.findOneOrFail(
           createChildWithParentDto.child.organizationId,
         );
+        if (
+          !(await this.clsService.isOrgCls(
+            createChildWithParentDto.child.classId,
+            createChildWithParentDto.child.organizationId,
+          ))
+        ) {
+          throw new NotFoundException(
+            `This class with id ${createChildWithParentDto.child.classId} is not found in organization with id ${createChildWithParentDto.child.organizationId}`,
+          );
+        }
       }
 
       // check user (creator)
-      await this.usersService.findById(createChildWithParentDto.child.userId);
+      await this.usersService.findById(currentUser.userId);
 
       const parentDto = createChildWithParentDto.parent;
       const parentAlreadyExists = await this.authService.isAlreadyExits(
@@ -153,7 +176,12 @@ export class ChildrenService {
         organization: createChildWithParentDto.child.organizationId
           ? { id: createChildWithParentDto.child.organizationId }
           : null,
-        user: { id: createChildWithParentDto.child.userId },
+
+        class: createChildWithParentDto.child.classId
+          ? { id: createChildWithParentDto.child.classId }
+          : null,
+
+        user: { id: currentUser.userId },
         parent: { id: parent.id },
       });
 
@@ -170,12 +198,20 @@ export class ChildrenService {
     return { children, count };
   }
 
-  async findAllByOrganization(orgId: string) {
+  async findAllByOrganization(orgId: string, currentUser: JwtRequestUser) {
     const organization = await this.organizationsService.findOneOrFail(orgId);
+
+    if (
+      !(await this.organizationsService.isOrgMember(currentUser.userId, orgId))
+    ) {
+      throw new UnauthorizedException(
+        "you aren't allowed to access these data",
+      );
+    }
 
     const children = await this.childrenRepository.find({
       where: { organization },
-      relations: ['class'],
+      relations: { class: { grade: true } },
     });
 
     return {
@@ -187,10 +223,13 @@ export class ChildrenService {
         return {
           id: child.id,
           name: child.name,
-          className: child.class.name,
+          className: child?.class?.name ?? 'غير مرتبط بفصل',
           imgSrc: '/avatar-placeholder.svg',
           evaluationStatus,
           evaluationStatusClassName,
+          birthDate: child.birthDate,
+          gender: child.gender,
+          grade: child.class?.grade.name,
         };
       }),
     };
@@ -204,8 +243,15 @@ export class ChildrenService {
   }
 
   async findOne(id: string) {
-    const child = await this.childrenRepository.findBy({ id });
-    if (!child) throw new NotFoundException('child not found');
+    const child = await this.childrenRepository.findOne({
+      where: { id },
+      relations: ['organization', 'class', 'parent'],
+    });
+
+    if (!child) {
+      throw new NotFoundException('child not found');
+    }
+
     return child;
   }
 

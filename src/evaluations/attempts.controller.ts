@@ -6,6 +6,7 @@ import {
   ParseUUIDPipe,
   Patch,
   Post,
+  Query,
   Req,
 } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
@@ -16,6 +17,7 @@ import { PrivateChildAttemptsService } from 'src/children/private-child-attempts
 import { EvaluationsService } from './evaluations.service';
 import { SaveProgressDto } from './dto/save-progress.dto';
 import { SubmitAttemptDto } from './dto/submit-attempt.dto';
+import { EvaluationAttemptStatus } from './enums/evaluation-attempt-status.enum';
 
 type JwtRequestUser = {
   userId: string;
@@ -32,6 +34,45 @@ export class AttemptsController {
     private readonly service: EvaluationsService,
     private readonly privateChildAttempts: PrivateChildAttemptsService,
   ) {}
+
+  @Roles(UserRole.ADMIN)
+  @Get()
+  @ApiOperation({ summary: 'Admin list/filter evaluation attempts' })
+  getAttemptsForAdmin(
+    @Query('status') status: EvaluationAttemptStatus,
+    @Query('evaluationId') evaluationId: string,
+    @Query('childId') childId: string,
+    @Req() req: AuthRequest,
+  ) {
+    const user = req.user as unknown as JwtRequestUser;
+
+    return this.service.getAttemptsForAdmin(
+      {
+        userId: user.userId,
+        roles: user.roles.map((r) => r.name),
+      },
+      {
+        status,
+        evaluationId,
+        childId,
+      },
+    );
+  }
+
+  @Roles(UserRole.PARENT, UserRole.ADMIN)
+  @Get('child/:childId')
+  @ApiOperation({ summary: 'Get evaluation attempts for a child' })
+  getAttemptsForChild(
+    @Param('childId', new ParseUUIDPipe()) childId: string,
+    @Req() req: AuthRequest,
+  ) {
+    const user = req.user as unknown as JwtRequestUser;
+
+    return this.service.getAttemptsForChild(childId, {
+      userId: user.userId,
+      roles: user.roles.map((r) => r.name),
+    });
+  }
 
   @Roles(UserRole.PARENT)
   @Post(':childId/start')
@@ -62,8 +103,7 @@ export class AttemptsController {
   @Roles(UserRole.PARENT)
   @Post(':childId/request-extra')
   @ApiOperation({
-    summary:
-      'Request a paid extra evaluation attempt (admin approval required)',
+    summary: 'Request a paid extra evaluation attempt',
   })
   requestPrivateExtra(
     @Param('childId', new ParseUUIDPipe()) childId: string,
@@ -75,7 +115,7 @@ export class AttemptsController {
 
   @Roles(UserRole.PARENT)
   @Patch(':id/save')
-  @ApiOperation({ summary: 'Save evaluation attempt progress (parent)' })
+  @ApiOperation({ summary: 'Save evaluation attempt progress' })
   save(
     @Param('id', new ParseUUIDPipe()) attemptId: string,
     @Body() dto: SaveProgressDto,
@@ -90,7 +130,7 @@ export class AttemptsController {
 
   @Roles(UserRole.PARENT)
   @Post(':id/submit')
-  @ApiOperation({ summary: 'Submit evaluation attempt final answers (parent)' })
+  @ApiOperation({ summary: 'Submit evaluation attempt final answers' })
   submit(
     @Param('id', new ParseUUIDPipe()) attemptId: string,
     @Body() dto: SubmitAttemptDto,
@@ -125,7 +165,7 @@ export class AttemptsController {
 
   @Roles(UserRole.ADMIN)
   @Post(':id/approve')
-  @ApiOperation({ summary: 'Approve an evaluation attempt (admin)' })
+  @ApiOperation({ summary: 'Approve an evaluation attempt' })
   approve(
     @Param('id', new ParseUUIDPipe()) attemptId: string,
     @Req() req: AuthRequest,
