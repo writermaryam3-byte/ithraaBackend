@@ -28,8 +28,8 @@ export class NotificationProcessor {
     concurrency: Number(process.env.NOTIFICATION_QUEUE_CONCURRENCY ?? 5),
   })
   async handleSend(job: Job<NotificationSendJobPayload>): Promise<void> {
-    const { delivery, userId, email, title, message } = job.data;
-
+    const { delivery, userId, email, title, message, type, metadata } =
+      job.data;
     if (!title?.trim() || !message?.trim()) {
       this.logger.warn(`Job ${job.id}: missing title or message, skipping`);
       return;
@@ -39,7 +39,8 @@ export class NotificationProcessor {
       delivery === NotificationDelivery.EMAIL ||
       delivery === NotificationDelivery.BOTH;
 
-    const sendVerificationEmail = delivery === NotificationDelivery.VERIFYEMAIL;
+    const sendVerificationEmail =
+      delivery === NotificationDelivery.VERIFY_EMAIL;
     const sendInApp =
       delivery === NotificationDelivery.IN_APP ||
       delivery === NotificationDelivery.BOTH;
@@ -62,7 +63,13 @@ export class NotificationProcessor {
     }
 
     if (sendInApp) {
-      await this.inApp.create(userId, title, message);
+      await this.inApp.create(
+        userId,
+        title,
+        message,
+        type ?? 'general',
+        metadata ?? null,
+      );
     }
   }
 }

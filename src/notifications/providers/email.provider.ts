@@ -55,10 +55,11 @@ export class EmailProvider {
   async sendVerificationEmail(email: string, userId: string) {
     const token = this.authService.generateVerificationToken(userId);
 
-    const link = `http://localhost:3000/verify-email?token=${token}`;
+    const frontendUrl = process.env.FRONTEND_URL ?? 'http://localhost:3000';
+    const link = `${frontendUrl}/verify-email?token=${token}`;
 
     return this.resend.emails.send({
-      from: 'onboarding@resend.dev',
+      from: process.env.MAIL_FROM ?? 'onboarding@resend.dev',
       to: email,
       subject: 'Verify your email',
       html: `

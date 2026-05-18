@@ -13,6 +13,11 @@ import { Child } from 'src/children/entities/child.entity';
 import { ChildrenModule } from 'src/children/children.module';
 import { EvaluationDimension } from './entities/evaluation-dimension.entity';
 import { EvaluationScoringService } from './evaluations-scoring-services.service';
+import { OwnerEvaluationResultsController } from './owner-evaluation-results.controller';
+import { OwnerEvaluationResultsService } from './owner-evaluation-results.service';
+import { Class } from 'src/classes/entities/class.entity';
+import { Organization } from 'src/organizations/entities/organization.entity';
+import { NotificationsModule } from 'src/notifications/notifications.module';
 
 @Module({
   imports: [
@@ -24,11 +29,22 @@ import { EvaluationScoringService } from './evaluations-scoring-services.service
       EvaluationQuestion,
       EvaluationQuestionAnswer,
       Child,
+      Class,
+      Organization,
       EvaluationDimension,
     ]),
     ChildrenModule,
+    NotificationsModule,
   ],
-  controllers: [EvaluationsController, AttemptsController],
-  providers: [EvaluationsService, EvaluationScoringService],
+  controllers: [
+    EvaluationsController,
+    AttemptsController,
+    OwnerEvaluationResultsController,
+  ],
+  providers: [
+    EvaluationsService,
+    EvaluationScoringService,
+    OwnerEvaluationResultsService,
+  ],
 })
 export class EvaluationsModule {}

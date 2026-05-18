@@ -44,6 +44,8 @@ export class NotificationsController {
     @Req() req: Request & { user: JwtRequestUser },
     @Query() query: ListNotificationsQueryDto,
   ) {
+    console.log('NOTIFICATIONS CURRENT USER:', req.user);
+    console.log('QUERY:', query);
     return this.notificationsService.listForUser(req.user.userId, query);
   }
 

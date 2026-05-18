@@ -1,5 +1,12 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { IsEmail, IsEnum, IsOptional, IsString, IsUUID, MaxLength } from 'class-validator';
+import {
+  IsEmail,
+  IsEnum,
+  IsOptional,
+  IsString,
+  IsUUID,
+  MaxLength,
+} from 'class-validator';
 import { NotificationDelivery } from '../enums/notification-delivery.enum';
 
 export class DispatchNotificationDto {
@@ -28,4 +35,16 @@ export class DispatchNotificationDto {
   @IsString()
   @MaxLength(10000)
   message: string;
+
+  @ApiPropertyOptional({ example: 'evaluation' })
+  @IsOptional()
+  @IsString()
+  @MaxLength(50)
+  type?: string;
+
+  @ApiPropertyOptional({
+    description: 'Optional metadata for frontend navigation and context',
+  })
+  @IsOptional()
+  metadata?: Record<string, unknown>;
 }

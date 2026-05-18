@@ -47,6 +47,26 @@ export class NotificationsService {
     payload: NotificationSendJobPayload,
     jobOptions?: JobOptions,
   ): Promise<void> {
+    const needsEmail =
+      payload.delivery === NotificationDelivery.EMAIL ||
+      payload.delivery === NotificationDelivery.BOTH ||
+      payload.delivery === NotificationDelivery.VERIFY_EMAIL;
+
+    if (needsEmail && !payload.email?.trim()) {
+      const user = await this.users.findOne({
+        where: { id: payload.userId },
+        select: ['id', 'email'],
+      });
+
+      if (!user?.email) {
+        throw new BadRequestException(
+          'Email is required for email notification delivery',
+        );
+      }
+
+      payload.email = user.email;
+    }
+
     await this.queue.add('send', payload, {
       ...DEFAULT_JOB_OPTIONS,
       ...jobOptions,
@@ -91,6 +111,8 @@ export class NotificationsService {
       email,
       title: dto.title,
       message: dto.message,
+      type: dto.type ?? 'general',
+      metadata: dto.metadata ?? null,
     };
 
     const job = await this.queue.add('send', payload, DEFAULT_JOB_OPTIONS);
@@ -109,6 +131,8 @@ export class NotificationsService {
       userId: string;
       title: string;
       message: string;
+      type: string;
+      metadata: Record<string, unknown> | null;
       isRead: boolean;
       createdAt: Date;
     }>;
@@ -127,15 +151,21 @@ export class NotificationsService {
       qb.andWhere('n.isRead = false');
     }
 
+    if (query.type) {
+      qb.andWhere('n.type = :type', { type: query.type });
+    }
+
     const [rows, total] = await qb.getManyAndCount();
     const totalPages = Math.max(1, Math.ceil(total / limit));
 
     return {
       data: rows.map((n) => ({
         id: n.id,
-        userId,
+        userId: n.userId,
         title: n.title,
         message: n.message,
+        type: n.type,
+        metadata: n.metadata,
         isRead: n.isRead,
         createdAt: n.createdAt,
       })),

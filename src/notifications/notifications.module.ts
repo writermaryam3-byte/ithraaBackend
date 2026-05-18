@@ -10,6 +10,7 @@ import { EmailProvider } from './providers/email.provider';
 import { InAppProvider } from './providers/inapp.provider';
 import { MailerModule } from 'src/mailer/mailer.module';
 import { UsersModule } from 'src/users/users.module';
+import { EvaluationNotificationsListener } from './listeners/evaluation-notifications.listener';
 
 @Module({
   imports: [
@@ -26,6 +27,7 @@ import { UsersModule } from 'src/users/users.module';
     NotificationProcessor,
     EmailProvider,
     InAppProvider,
+    EvaluationNotificationsListener,
   ],
   exports: [NotificationsService],
 })

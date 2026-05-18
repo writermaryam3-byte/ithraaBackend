@@ -12,14 +12,23 @@ export class InAppProvider {
     private readonly notifications: Repository<Notification>,
   ) {}
 
-  async create(userId: string, title: string, message: string): Promise<Notification> {
+  async create(
+    userId: string,
+    title: string,
+    message: string,
+    type = 'general',
+    metadata: Record<string, unknown> | null = null,
+  ): Promise<Notification> {
     try {
       const row = this.notifications.create({
-        user: { id: userId },
+        userId,
         title,
         message,
+        type,
+        metadata,
         isRead: false,
       });
+
       return await this.notifications.save(row);
     } catch (err) {
       this.logger.error(

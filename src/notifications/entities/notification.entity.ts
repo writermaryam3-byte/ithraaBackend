@@ -21,6 +21,10 @@ export class Notification {
   @JoinColumn({ name: 'userId' })
   user: User;
 
+  @Index()
+  @Column({ type: 'uuid' })
+  userId: string;
+
   @Column({ type: 'varchar', length: 500 })
   title: string;
 
@@ -32,4 +36,10 @@ export class Notification {
 
   @CreateDateColumn()
   createdAt: Date;
+
+  @Column({ type: 'varchar', length: 50, default: 'general' })
+  type: string;
+
+  @Column({ type: 'jsonb', nullable: true })
+  metadata: Record<string, unknown> | null;
 }

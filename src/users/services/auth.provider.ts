@@ -140,7 +140,7 @@ export class AuthProvider {
             userId: user.id,
             title: 'verification email',
             message: `Welcome ${user.name}, we're happy to have you معنا!`,
-            delivery: NotificationDelivery.VERIFYEMAIL, // email + inapp
+            delivery: NotificationDelivery.VERIFY_EMAIL, // email + inapp
             email: user.email,
           });
           return user;
@@ -180,7 +180,7 @@ export class AuthProvider {
         userId: user.id,
         title: 'verification email',
         message: `Welcome ${user.name}, we're happy to have you معنا!`,
-        delivery: NotificationDelivery.VERIFYEMAIL, // email + inapp
+        delivery: NotificationDelivery.VERIFY_EMAIL, // email + inapp
         email: user.email,
       });
       return { user, enricher };

@@ -2,5 +2,5 @@ export enum NotificationDelivery {
   EMAIL = 'email',
   IN_APP = 'inapp',
   BOTH = 'both',
-  VERIFYEMAIL = 'verify email',
+  VERIFY_EMAIL = 'verify_email',
 }
