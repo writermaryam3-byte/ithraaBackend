@@ -63,37 +63,41 @@ export class PrivateChildAttemptsService {
 
   async startMainSlot(childId: string, parentId: string) {
     const usage = await this.attemptUsageService.getUsage(childId, parentId);
-
     if (usage.totalAttempts > 0) {
       throw new BadRequestException(
         'Main attempt already started or completed for this child',
       );
     }
+    await this.dataSource.transaction(async (manager) => {
+      const repo = manager.getRepository(ChildPrivateAttempt);
 
-    const existing = await this.privateAttempts.findOne({
-      where: {
+      const existing = await this.privateAttempts.findOne({
+        where: {
+          childId,
+          parentId,
+          kind: SlotKind.MAIN,
+          evaluationAttemptId: IsNull(),
+        },
+        order: { createdAt: 'DESC' },
+        lock: { mode: 'pessimistic_write' },
+      });
+
+      if (existing && existing.status !== SlotStatus.COMPLETED) {
+        return existing;
+      }
+
+      const row = repo.create({
         childId,
         parentId,
         kind: SlotKind.MAIN,
-        evaluationAttemptId: IsNull(),
-      },
-      order: { createdAt: 'DESC' },
+        status: SlotStatus.READY,
+        isPaid: false,
+        requiresApproval: false,
+        evaluationAttemptId: null,
+        paymentId: null,
+      });
+      return repo.save(row);
     });
-    if (existing && existing.status !== SlotStatus.COMPLETED) {
-      return existing;
-    }
-
-    const row = this.privateAttempts.create({
-      childId,
-      parentId,
-      kind: SlotKind.MAIN,
-      status: SlotStatus.READY,
-      isPaid: false,
-      requiresApproval: false,
-      evaluationAttemptId: null,
-      paymentId: null,
-    });
-    return this.privateAttempts.save(row);
   }
 
   async requestRetake(childId: string, parentId: string) {
@@ -200,35 +204,32 @@ export class PrivateChildAttemptsService {
     if (!attempt.requiresApproval) {
       throw new BadRequestException('Extra attempt does not require approval');
     }
+    await this.dataSource.transaction(async (manager) => {
+      attempt.transitionTo(SlotStatus.AWAITING_PAYMENT);
 
-    attempt.requiresApproval = false;
-    attempt.status = SlotStatus.AWAITING_PAYMENT;
-    await this.privateAttempts.save(attempt);
+      const checkout = await this.payments.createPaymentForPrivateExtraAttempt(
+        attempt.parentId,
+        {
+          childId: attempt.childId,
+          privateAttemptId: attempt.id,
+          amount: this.extraAttemptPriceSar(),
+          description: 'Extra child evaluation attempt',
+        },
+      );
+      attempt.paymentId = checkout.id;
 
-    const checkout = await this.payments.createPaymentForPrivateExtraAttempt(
-      attempt.parentId,
-      {
-        childId: attempt.childId,
-        privateAttemptId: attempt.id,
-        amount: this.extraAttemptPriceSar(),
-        description: 'Extra child evaluation attempt',
-      },
-    );
-
-    attempt.paymentId = checkout.id;
-    await this.privateAttempts.save(attempt);
-
-    await this.notifyPaymentRequired(
-      attempt.parentId,
-      attempt.child.name,
-      checkout.checkoutUrl,
-      checkout.expiresAt,
-    );
-
-    return {
-      attempt,
-      payment: checkout,
-    };
+      await manager.save(attempt);
+      await this.notifyPaymentRequired(
+        attempt.parentId,
+        attempt.child.name,
+        checkout.checkoutUrl,
+        checkout.expiresAt,
+      );
+      return {
+        attempt,
+        payment: checkout,
+      };
+    });
   }
 
   async initiateOrRefreshExtraPayment(
@@ -264,41 +265,19 @@ export class PrivateChildAttemptsService {
     manager: EntityManager,
     childId: string,
     parentId: string,
-    nextAttemptNumber: number,
   ): Promise<ChildPrivateAttempt | null> {
     const repo = manager.getRepository(ChildPrivateAttempt);
-    if (nextAttemptNumber === 1) {
-      return repo.findOne({
-        where: {
-          childId,
-          parentId,
-          kind: SlotKind.MAIN,
-          status: SlotStatus.READY,
-          evaluationAttemptId: IsNull(),
-        },
-        lock: { mode: 'pessimistic_write' },
-      });
-    }
-    if (nextAttemptNumber === 2) {
-      return repo.findOne({
-        where: {
-          childId,
-          parentId,
-          kind: SlotKind.RETAKE,
-          status: SlotStatus.READY,
-          evaluationAttemptId: IsNull(),
-        },
-        lock: { mode: 'pessimistic_write' },
-      });
-    }
+
     return repo.findOne({
       where: {
         childId,
         parentId,
-        kind: SlotKind.EXTRA,
         status: SlotStatus.READY,
-        isPaid: true,
         evaluationAttemptId: IsNull(),
+      },
+
+      order: {
+        createdAt: 'ASC',
       },
       lock: { mode: 'pessimistic_write' },
     });
@@ -323,8 +302,6 @@ export class PrivateChildAttemptsService {
     manager: EntityManager,
     evaluationAttemptId: string,
     childId: string,
-    parentId: string,
-    attemptNumber: number,
   ): Promise<void> {
     const repo = manager.getRepository(ChildPrivateAttempt);
     const row = await repo.findOne({
@@ -332,7 +309,7 @@ export class PrivateChildAttemptsService {
       lock: { mode: 'pessimistic_write' },
     });
     if (row) {
-      row.status = SlotStatus.COMPLETED;
+      row.transitionTo(SlotStatus.COMPLETED);
       await repo.save(row);
     }
 
@@ -342,18 +319,6 @@ export class PrivateChildAttemptsService {
       lock: { mode: 'pessimistic_write' },
     });
     if (!child) return;
-
-    const usage = await this.attemptUsageService.getUsage(childId, parentId);
-
-    if (usage.totalAttempts === 1) {
-      child.attemptsUsed = Math.max(child.attemptsUsed, 1);
-    } else if (usage.totalAttempts === 2) {
-      child.attemptsUsed = Math.max(child.attemptsUsed, 2);
-      child.retakeUsed = true;
-    } else {
-      child.attemptsUsed = Math.max(child.attemptsUsed, attemptNumber);
-    }
-    await childRepo.save(child);
   }
 
   @OnEvent(PAYMENT_EVENTS.SUCCESS)
@@ -376,7 +341,7 @@ export class PrivateChildAttemptsService {
       if (!row) return;
       if (row.status !== SlotStatus.AWAITING_PAYMENT) return;
 
-      row.status = SlotStatus.READY;
+      row.transitionTo(SlotStatus.READY);
       row.isPaid = true;
       row.paymentId = payload.paymentId;
       await repo.save(row);

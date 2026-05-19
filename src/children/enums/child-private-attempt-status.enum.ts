@@ -2,7 +2,6 @@ export enum SlotStatus {
   READY = 'READY',
   REQUESTED = 'REQUESTED',
   AWAITING_PAYMENT = 'AWAITING_PAYMENT',
-  PAID = 'PAID', // optional
   CONSUMED = 'CONSUMED',
   COMPLETED = 'COMPLETED',
 }

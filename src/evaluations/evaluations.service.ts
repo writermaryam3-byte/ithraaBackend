@@ -447,7 +447,6 @@ export class EvaluationsService {
           manager,
           attempt.id,
           attempt.childId,
-          attempt.attemptNumber,
         );
       }
 
@@ -604,14 +603,11 @@ export class EvaluationsService {
       let entitlementId: string | null = null;
 
       if (isPrivateChild) {
-        const nextNum = count + 1;
-
         const entitlement =
           await this.privateChildAttempts.findEntitlementForNext(
             manager,
             dto.childId,
             actor.userId,
-            nextNum,
           );
 
         if (!entitlement) {
@@ -866,7 +862,6 @@ export class EvaluationsService {
           manager,
           locked.id,
           locked.childId,
-          locked.attemptNumber,
         );
       }
 

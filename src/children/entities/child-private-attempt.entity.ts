@@ -41,6 +41,8 @@ export class ChildPrivateAttempt {
   @Column({ type: 'enum', enum: SlotStatus })
   status: SlotStatus;
 
+  // deprecated
+
   @Column({ default: false })
   isPaid: boolean;
 
@@ -58,4 +60,23 @@ export class ChildPrivateAttempt {
 
   @UpdateDateColumn()
   updatedAt: Date;
+
+  transitionTo(next: SlotStatus) {
+    const validTransitions: Record<SlotStatus, SlotStatus[]> = {
+      [SlotStatus.READY]: [SlotStatus.CONSUMED],
+
+      [SlotStatus.REQUESTED]: [SlotStatus.AWAITING_PAYMENT, SlotStatus.READY],
+      [SlotStatus.AWAITING_PAYMENT]: [SlotStatus.READY],
+      [SlotStatus.CONSUMED]: [SlotStatus.COMPLETED],
+      [SlotStatus.COMPLETED]: [],
+    };
+
+    const allowed = validTransitions[this.status] || [];
+
+    if (!allowed.includes(next)) {
+      throw new Error(`Invalid transition from ${this.status} to ${next}`);
+    }
+
+    this.status = next;
+  }
 }
