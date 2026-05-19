@@ -10,8 +10,8 @@ import {
   Index,
 } from 'typeorm';
 import { Child } from './child.entity';
-import { ChildPrivateAttemptStatus } from '../enums/child-private-attempt-status.enum';
-import { ChildPrivateAttemptKind } from '../enums/child-private-attempt-kind.enum';
+import { SlotKind } from '../enums/child-private-attempt-kind.enum';
+import { SlotStatus } from '../enums/child-private-attempt-status.enum';
 
 @Entity('child_private_attempts')
 @Index('idx_child_private_attempt_child_status', ['childId', 'status'])
@@ -35,11 +35,11 @@ export class ChildPrivateAttempt {
   @JoinColumn({ name: 'parentId' })
   parent: User;
 
-  @Column({ type: 'enum', enum: ChildPrivateAttemptKind })
-  kind: ChildPrivateAttemptKind;
+  @Column({ type: 'enum', enum: SlotKind })
+  kind: SlotKind;
 
-  @Column({ type: 'enum', enum: ChildPrivateAttemptStatus })
-  status: ChildPrivateAttemptStatus;
+  @Column({ type: 'enum', enum: SlotStatus })
+  status: SlotStatus;
 
   @Column({ default: false })
   isPaid: boolean;

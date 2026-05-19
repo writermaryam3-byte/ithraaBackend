@@ -1,5 +1,5 @@
-export enum ChildPrivateAttemptKind {
-  MAIN = 'MAIN',
-  RETAKE = 'RETAKE',
-  EXTRA = 'EXTRA',
+export enum SlotKind {
+  MAIN,
+  RETAKE,
+  EXTRA,
 }

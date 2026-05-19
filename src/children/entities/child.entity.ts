@@ -15,6 +15,7 @@ import {
 import { ChildProfile } from './child-profile.entity';
 import { Class } from 'src/classes/entities/class.entity';
 import { ChildPrivateAttempt } from './child-private-attempt.entity';
+import { ChildType } from '../enums/child-type.enum';
 
 @Entity('children')
 export class Child {
@@ -29,6 +30,9 @@ export class Child {
 
   @Column({ type: 'enum', enum: Gender })
   gender: Gender;
+
+  @Column({ type: 'enum', enum: ChildType })
+  type: ChildType;
 
   @ManyToOne(() => Organization, { nullable: true, onDelete: 'CASCADE' })
   @JoinColumn({ name: 'organizationId' })
@@ -51,6 +55,9 @@ export class Child {
 
   @OneToOne(() => ChildProfile, (profile) => profile.child)
   profile: ChildProfile;
+
+  // ⚠️ Deprecated: do NOT use as source of truth
+  // kept temporarily for backward compatibility
 
   @Column({ type: 'int', default: 0 })
   attemptsUsed: number;

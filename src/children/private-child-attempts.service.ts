@@ -10,13 +10,15 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { DataSource, EntityManager, IsNull, Repository } from 'typeorm';
 import { Child } from './entities/child.entity';
 import { ChildPrivateAttempt } from './entities/child-private-attempt.entity';
-import { ChildPrivateAttemptKind } from './enums/child-private-attempt-kind.enum';
-import { ChildPrivateAttemptStatus } from './enums/child-private-attempt-status.enum';
 import { NotificationDelivery } from 'src/notifications/enums/notification-delivery.enum';
 import { NotificationsService } from 'src/notifications/notifications.service';
 import { PaymentsService } from 'src/payments/payments.service';
 import type { PaymentSuccessEventPayload } from 'src/payments/payments.events';
 import { PAYMENT_EVENTS } from 'src/payments/payments.events';
+import { AttemptUsageService } from 'src/evaluations/attempt-usage.service';
+import { ChildType } from './enums/child-type.enum';
+import { SlotKind } from './enums/child-private-attempt-kind.enum';
+import { SlotStatus } from './enums/child-private-attempt-status.enum';
 
 @Injectable()
 export class PrivateChildAttemptsService {
@@ -28,8 +30,19 @@ export class PrivateChildAttemptsService {
     private readonly privateAttempts: Repository<ChildPrivateAttempt>,
     private readonly payments: PaymentsService,
     private readonly notifications: NotificationsService,
+    private readonly attemptUsageService: AttemptUsageService,
     private readonly config: ConfigService,
   ) {}
+
+  async assertCanStartAttempt(child: Child, parentId: string) {
+    const usage = await this.attemptUsageService.getUsage(child.id, parentId);
+
+    if (child.type === ChildType.INSTITUTIONAL) {
+      if (usage.totalAttempts >= 2) {
+        throw new BadRequestException('Max attempts reached');
+      }
+    }
+  }
 
   private extraAttemptPriceSar(): number {
     return Number(this.config.get<string>('EXTRA_ATTEMPT_PRICE_SAR') ?? '199');
@@ -49,8 +62,9 @@ export class PrivateChildAttemptsService {
   }
 
   async startMainSlot(childId: string, parentId: string) {
-    const child = await this.loadPrivateChildOrThrow(childId, parentId);
-    if (child.attemptsUsed > 0) {
+    const usage = await this.attemptUsageService.getUsage(childId, parentId);
+
+    if (usage.totalAttempts > 0) {
       throw new BadRequestException(
         'Main attempt already started or completed for this child',
       );
@@ -60,20 +74,20 @@ export class PrivateChildAttemptsService {
       where: {
         childId,
         parentId,
-        kind: ChildPrivateAttemptKind.MAIN,
+        kind: SlotKind.MAIN,
         evaluationAttemptId: IsNull(),
       },
       order: { createdAt: 'DESC' },
     });
-    if (existing && existing.status !== ChildPrivateAttemptStatus.COMPLETED) {
+    if (existing && existing.status !== SlotStatus.COMPLETED) {
       return existing;
     }
 
     const row = this.privateAttempts.create({
       childId,
       parentId,
-      kind: ChildPrivateAttemptKind.MAIN,
-      status: ChildPrivateAttemptStatus.PENDING,
+      kind: SlotKind.MAIN,
+      status: SlotStatus.READY,
       isPaid: false,
       requiresApproval: false,
       evaluationAttemptId: null,
@@ -84,10 +98,12 @@ export class PrivateChildAttemptsService {
 
   async requestRetake(childId: string, parentId: string) {
     const child = await this.loadPrivateChildOrThrow(childId, parentId);
-    if (child.attemptsUsed < 1) {
+    const usage = await this.attemptUsageService.getUsage(childId, parentId);
+
+    if (usage.totalAttempts < 1) {
       throw new BadRequestException('Complete the main attempt before retake');
     }
-    if (child.retakeUsed) {
+    if (usage.hasRetake) {
       throw new BadRequestException('Retake already used');
     }
 
@@ -95,11 +111,11 @@ export class PrivateChildAttemptsService {
       where: {
         childId,
         parentId,
-        kind: ChildPrivateAttemptKind.RETAKE,
+        kind: SlotKind.RETAKE,
         evaluationAttemptId: IsNull(),
       },
     });
-    if (open && open.status !== ChildPrivateAttemptStatus.COMPLETED) {
+    if (open && open.status !== SlotStatus.COMPLETED) {
       await this.notifyRetakeRequested(parentId, child.name);
       return open;
     }
@@ -107,8 +123,8 @@ export class PrivateChildAttemptsService {
     const row = this.privateAttempts.create({
       childId,
       parentId,
-      kind: ChildPrivateAttemptKind.RETAKE,
-      status: ChildPrivateAttemptStatus.RETAKE,
+      kind: SlotKind.RETAKE,
+      status: SlotStatus.READY,
       isPaid: false,
       requiresApproval: false,
       evaluationAttemptId: null,
@@ -121,7 +137,9 @@ export class PrivateChildAttemptsService {
 
   async requestExtraAttempt(childId: string, parentId: string) {
     const child = await this.loadPrivateChildOrThrow(childId, parentId);
-    if (child.attemptsUsed < 2 || !child.retakeUsed) {
+    const usage = await this.attemptUsageService.getUsage(childId, parentId);
+
+    if (usage.totalAttempts < 2 || !usage.hasRetake) {
       throw new BadRequestException(
         'Both free attempts must be completed before requesting an extra attempt',
       );
@@ -131,31 +149,28 @@ export class PrivateChildAttemptsService {
       where: {
         childId,
         parentId,
-        kind: ChildPrivateAttemptKind.EXTRA,
+        kind: SlotKind.EXTRA,
       },
       order: { createdAt: 'DESC' },
     });
     if (
       pending &&
-      pending.status !== ChildPrivateAttemptStatus.COMPLETED &&
-      pending.status !== ChildPrivateAttemptStatus.EXTRA_REQUESTED
+      pending.status !== SlotStatus.COMPLETED &&
+      pending.status !== SlotStatus.REQUESTED
     ) {
       throw new BadRequestException(
         'An extra attempt is already in progress or awaiting payment',
       );
     }
-    if (
-      pending &&
-      pending.status === ChildPrivateAttemptStatus.EXTRA_REQUESTED
-    ) {
+    if (pending && pending.status === SlotStatus.REQUESTED) {
       throw new BadRequestException('Extra attempt already awaiting approval');
     }
 
     const row = this.privateAttempts.create({
       childId,
       parentId,
-      kind: ChildPrivateAttemptKind.EXTRA,
-      status: ChildPrivateAttemptStatus.EXTRA_REQUESTED,
+      kind: SlotKind.EXTRA,
+      status: SlotStatus.REQUESTED,
       isPaid: false,
       requiresApproval: true,
       evaluationAttemptId: null,
@@ -176,10 +191,10 @@ export class PrivateChildAttemptsService {
       relations: { child: true, parent: true },
     });
     if (!attempt) throw new NotFoundException('Attempt request not found');
-    if (attempt.kind !== ChildPrivateAttemptKind.EXTRA) {
+    if (attempt.kind !== SlotKind.EXTRA) {
       throw new BadRequestException('Not an extra attempt request');
     }
-    if (attempt.status !== ChildPrivateAttemptStatus.EXTRA_REQUESTED) {
+    if (attempt.status !== SlotStatus.REQUESTED) {
       throw new BadRequestException('Extra attempt is not awaiting approval');
     }
     if (!attempt.requiresApproval) {
@@ -187,7 +202,7 @@ export class PrivateChildAttemptsService {
     }
 
     attempt.requiresApproval = false;
-    attempt.status = ChildPrivateAttemptStatus.PENDING_PAYMENT;
+    attempt.status = SlotStatus.AWAITING_PAYMENT;
     await this.privateAttempts.save(attempt);
 
     const checkout = await this.payments.createPaymentForPrivateExtraAttempt(
@@ -225,7 +240,7 @@ export class PrivateChildAttemptsService {
       relations: { child: true },
     });
     if (!attempt) throw new NotFoundException('Attempt not found');
-    if (attempt.status !== ChildPrivateAttemptStatus.PENDING_PAYMENT) {
+    if (attempt.status !== SlotStatus.AWAITING_PAYMENT) {
       throw new BadRequestException('Payment is not required for this attempt');
     }
     if (!attempt.paymentId) {
@@ -257,8 +272,8 @@ export class PrivateChildAttemptsService {
         where: {
           childId,
           parentId,
-          kind: ChildPrivateAttemptKind.MAIN,
-          status: ChildPrivateAttemptStatus.PENDING,
+          kind: SlotKind.MAIN,
+          status: SlotStatus.READY,
           evaluationAttemptId: IsNull(),
         },
         lock: { mode: 'pessimistic_write' },
@@ -269,8 +284,8 @@ export class PrivateChildAttemptsService {
         where: {
           childId,
           parentId,
-          kind: ChildPrivateAttemptKind.RETAKE,
-          status: ChildPrivateAttemptStatus.RETAKE,
+          kind: SlotKind.RETAKE,
+          status: SlotStatus.READY,
           evaluationAttemptId: IsNull(),
         },
         lock: { mode: 'pessimistic_write' },
@@ -280,8 +295,8 @@ export class PrivateChildAttemptsService {
       where: {
         childId,
         parentId,
-        kind: ChildPrivateAttemptKind.EXTRA,
-        status: ChildPrivateAttemptStatus.PENDING,
+        kind: SlotKind.EXTRA,
+        status: SlotStatus.READY,
         isPaid: true,
         evaluationAttemptId: IsNull(),
       },
@@ -308,6 +323,7 @@ export class PrivateChildAttemptsService {
     manager: EntityManager,
     evaluationAttemptId: string,
     childId: string,
+    parentId: string,
     attemptNumber: number,
   ): Promise<void> {
     const repo = manager.getRepository(ChildPrivateAttempt);
@@ -316,7 +332,7 @@ export class PrivateChildAttemptsService {
       lock: { mode: 'pessimistic_write' },
     });
     if (row) {
-      row.status = ChildPrivateAttemptStatus.COMPLETED;
+      row.status = SlotStatus.COMPLETED;
       await repo.save(row);
     }
 
@@ -327,9 +343,11 @@ export class PrivateChildAttemptsService {
     });
     if (!child) return;
 
-    if (attemptNumber === 1) {
+    const usage = await this.attemptUsageService.getUsage(childId, parentId);
+
+    if (usage.totalAttempts === 1) {
       child.attemptsUsed = Math.max(child.attemptsUsed, 1);
-    } else if (attemptNumber === 2) {
+    } else if (usage.totalAttempts === 2) {
       child.attemptsUsed = Math.max(child.attemptsUsed, 2);
       child.retakeUsed = true;
     } else {
@@ -356,9 +374,9 @@ export class PrivateChildAttemptsService {
         lock: { mode: 'pessimistic_write' },
       });
       if (!row) return;
-      if (row.status !== ChildPrivateAttemptStatus.PENDING_PAYMENT) return;
+      if (row.status !== SlotStatus.AWAITING_PAYMENT) return;
 
-      row.status = ChildPrivateAttemptStatus.PENDING;
+      row.status = SlotStatus.READY;
       row.isPaid = true;
       row.paymentId = payload.paymentId;
       await repo.save(row);

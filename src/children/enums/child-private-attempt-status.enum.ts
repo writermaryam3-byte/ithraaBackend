@@ -1,7 +1,8 @@
-export enum ChildPrivateAttemptStatus {
-  PENDING = 'PENDING',
+export enum SlotStatus {
+  READY = 'READY',
+  REQUESTED = 'REQUESTED',
+  AWAITING_PAYMENT = 'AWAITING_PAYMENT',
+  PAID = 'PAID', // optional
+  CONSUMED = 'CONSUMED',
   COMPLETED = 'COMPLETED',
-  RETAKE = 'RETAKE',
-  EXTRA_REQUESTED = 'EXTRA_REQUESTED',
-  PENDING_PAYMENT = 'PENDING_PAYMENT',
 }

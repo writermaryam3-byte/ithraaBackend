@@ -18,6 +18,7 @@ import { OwnerEvaluationResultsService } from './owner-evaluation-results.servic
 import { Class } from 'src/classes/entities/class.entity';
 import { Organization } from 'src/organizations/entities/organization.entity';
 import { NotificationsModule } from 'src/notifications/notifications.module';
+import { AttemptUsageService } from './attempt-usage.service';
 
 @Module({
   imports: [
@@ -45,6 +46,7 @@ import { NotificationsModule } from 'src/notifications/notifications.module';
     EvaluationsService,
     EvaluationScoringService,
     OwnerEvaluationResultsService,
+    AttemptUsageService,
   ],
 })
 export class EvaluationsModule {}
