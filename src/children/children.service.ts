@@ -82,6 +82,19 @@ export class ChildrenService {
     return { children, count };
   }
 
+  async findOrgChildrenForParent(parentId: string) {
+    const organization = await this.organizationsService.findByParent(parentId);
+    const [children, count] = await this.childrenRepository.findAndCount({
+      where: {
+        parent: { id: parentId },
+        organization: { id: organization.id },
+      },
+      order: { createdAt: 'DESC' },
+    });
+
+    return { children, count };
+  }
+
   async create(
     createChildWithParentDto: CreateChildWithParentDto,
     currentUser: JwtRequestUser,

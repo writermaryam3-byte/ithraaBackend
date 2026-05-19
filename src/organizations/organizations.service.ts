@@ -31,6 +31,24 @@ export class OrganizationsService {
     return org;
   }
 
+  async findByParent(id: string) {
+    const org = await this.organizationRepository.findOne({
+      where: {
+        users: {
+          id,
+        },
+      },
+    });
+
+    if (!org) {
+      throw new NotFoundException(
+        `Parent with id ${id} is not related to any organization`,
+      );
+    }
+
+    return org;
+  }
+
   async findByOwner(ownerId: string) {
     const org = await this.organizationRepository.findOne({
       where: { owner: { id: ownerId } },

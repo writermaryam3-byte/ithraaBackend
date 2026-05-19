@@ -11,6 +11,7 @@ import {
   OneToOne,
   ManyToMany,
   JoinTable,
+  ManyToOne,
 } from 'typeorm';
 import { Role } from './user-roles.entity';
 import { Enricher } from './enricher.entity';
@@ -44,7 +45,19 @@ export class User {
   @JoinTable()
   roles: Role[];
 
+  /**
+   * Organization owner
+   */
   @OneToOne(() => Organization, (org) => org.owner)
+  ownedOrganization: Organization;
+
+  /**
+   * Organization membership
+   */
+  @ManyToOne(() => Organization, (org) => org.users, {
+    nullable: true,
+    onDelete: 'SET NULL',
+  })
   organization: Organization;
 
   @OneToOne(() => Enricher, (enricher) => enricher.user)

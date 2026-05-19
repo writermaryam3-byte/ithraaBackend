@@ -32,4 +32,14 @@ export class ParentChildrenController {
     const user = req.user as unknown as JwtRequestUser;
     return this.childrenService.findPrivateChildrenForParent(user.userId);
   }
+
+  @Roles(UserRole.PARENT)
+  @Get('org-children')
+  @ApiOperation({
+    summary: 'List organization children for the current parent',
+  })
+  listOrgChildren(@Req() req: AuthRequest) {
+    const user = req.user as unknown as JwtRequestUser;
+    return this.childrenService.findOrgChildrenForParent(user.userId);
+  }
 }

@@ -34,12 +34,29 @@ export class Organization {
   })
   approvalStatus: ApprovalStatus;
 
-  @OneToOne(() => User, (user) => user.organization, { onDelete: 'CASCADE' })
+  @Column({ unique: true })
+  ownerId: string;
+
+  /**
+   * Organization owner
+   */
+  @OneToOne(() => User, (user) => user.ownedOrganization, {
+    onDelete: 'CASCADE',
+  })
   @JoinColumn({ name: 'ownerId' })
   owner: User;
 
+  /**
+   * Users inside organization
+   */
+  @OneToMany(() => User, (user) => user.organization)
+  users: User[];
+
   @OneToMany(() => Teacher, (teacher) => teacher.organization)
   teachers: Teacher[];
+
+  @OneToMany(() => User, (parent) => parent.organization)
+  parents: User[];
 
   @OneToMany(() => Grade, (grade) => grade.organization)
   grades: Grade[];

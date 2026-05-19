@@ -1,4 +1,8 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import bcrypt from 'bcrypt';
 import { UserRole } from 'src/common/enums/role.enum';
@@ -6,7 +10,6 @@ import { SessionService } from 'src/session/session.service';
 import { User } from 'src/users/entities/user.entity';
 import { DataSource } from 'typeorm';
 import { AccountType } from 'src/common/enums/account-type.enum';
-import { MailerService } from 'src/mailer/mailer.service';
 import { Role } from 'src/users/entities/user-roles.entity';
 import { SignupStrategyFactory } from '../factories/signup.factory';
 import { BeneficiariesSignupDto } from '../dto/beneficiaries/beneficiaries-signup.dto';
@@ -31,18 +34,29 @@ export class AuthProvider {
     private readonly sessionsService: SessionService,
     private readonly dataSource: DataSource,
     private readonly strategyFactory: SignupStrategyFactory,
-    private readonly mailerService: MailerService,
     private readonly notificationsService: NotificationsService,
   ) {}
 
   generateVerificationToken(userId: string) {
-    return this.jwtService.sign({ userId }, { expiresIn: '1d' });
+    return this.jwtService.sign(
+      {
+        sub: userId,
+        type: 'email_verification',
+      },
+      { expiresIn: '1d' },
+    );
   }
 
   async verifyEmail(token: string) {
-    const payload = this.jwtService.verify<{ sub: string; userId: string }>(
-      token,
-    );
+    const payload = this.jwtService.verify<{
+      sub: string;
+      userId: string;
+      type: string;
+    }>(token);
+
+    if (payload.type !== 'email_verification') {
+      throw new BadRequestException('Invalid token type');
+    }
 
     const user = await this.usersService.findById(payload.userId);
 
