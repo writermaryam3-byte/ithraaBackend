@@ -17,7 +17,7 @@ export class Enricher {
   @JoinColumn()
   user: User;
 
-  @Column()
+  @Column({ nullable: true })
   organizationName: string;
 
   @Column({
