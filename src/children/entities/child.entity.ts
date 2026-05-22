@@ -1,5 +1,4 @@
 import { Gender } from 'src/common/enums/gender.enum';
-import { Organization } from 'src/organizations/entities/organization.entity';
 import { User } from 'src/users/entities/user.entity';
 import {
   Entity,
@@ -11,11 +10,11 @@ import {
   CreateDateColumn,
   UpdateDateColumn,
   JoinColumn,
+  Index,
 } from 'typeorm';
 import { ChildProfile } from './child-profile.entity';
 import { Class } from 'src/classes/entities/class.entity';
-import { ChildPrivateAttempt } from './child-private-attempt.entity';
-import { ChildType } from '../enums/child-type.enum';
+import { EvaluationSlot } from 'src/evaluations/entities/evaluation-slot.entity';
 
 @Entity('children')
 export class Child {
@@ -31,12 +30,9 @@ export class Child {
   @Column({ type: 'enum', enum: Gender })
   gender: Gender;
 
-  @Column({ type: 'enum', enum: ChildType })
-  type: ChildType;
-
-  @ManyToOne(() => Organization, { nullable: true, onDelete: 'CASCADE' })
-  @JoinColumn({ name: 'organizationId' })
-  organization: Organization | null;
+  @Index()
+  @Column({ type: 'uuid' })
+  classId: string | null;
 
   @ManyToOne(() => Class, (cls) => cls.children, {
     nullable: true,
@@ -45,9 +41,13 @@ export class Child {
   @JoinColumn({ name: 'classId' })
   class: Class | null;
 
+  @Index()
+  @Column({ type: 'uuid' })
+  createdById: string;
+
   @ManyToOne(() => User, (user) => user.children, { onDelete: 'CASCADE' })
-  @JoinColumn({ name: 'userId' })
-  user: User;
+  @JoinColumn({ name: 'createdById' })
+  createdBy: User;
 
   @ManyToOne(() => User, (user) => user.children, { onDelete: 'CASCADE' })
   @JoinColumn({ name: 'parentId' })
@@ -56,17 +56,8 @@ export class Child {
   @OneToOne(() => ChildProfile, (profile) => profile.child)
   profile: ChildProfile;
 
-  // ⚠️ Deprecated: do NOT use as source of truth
-  // kept temporarily for backward compatibility
-
-  @Column({ type: 'int', default: 0 })
-  attemptsUsed: number;
-
-  @Column({ default: false })
-  retakeUsed: boolean;
-
-  @OneToMany(() => ChildPrivateAttempt, (a) => a.child)
-  privateAttempts: ChildPrivateAttempt[];
+  @OneToMany(() => EvaluationSlot, (a) => a.child)
+  slots: EvaluationSlot[];
 
   @CreateDateColumn()
   createdAt: Date;

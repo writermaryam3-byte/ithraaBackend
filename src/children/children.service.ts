@@ -37,6 +37,11 @@ export class ChildrenService {
     private notificationsService: NotificationsService,
   ) {}
 
+  async isPrivateChild(id: string) {
+    const child = await this.findOneOrFail(id);
+    return child.classId === null;
+  }
+
   async createChildByParent(parentId: string, dto: CreateChildByParentDto) {
     const user = await this.usersService.findById(parentId);
     const isParent = user.roles.some((r) => r.name === UserRole.PARENT);
@@ -47,7 +52,7 @@ export class ChildrenService {
     }
 
     const privateChildCount = await this.childrenRepository.count({
-      where: { parent: { id: parentId }, organization: IsNull() },
+      where: { parent: { id: parentId }, classId: IsNull() },
     });
     if (privateChildCount >= 2) {
       await this.notificationsService.enqueue({
@@ -67,8 +72,6 @@ export class ChildrenService {
       organization: null,
       user: { id: parentId },
       parent: { id: parentId },
-      attemptsUsed: 0,
-      retakeUsed: false,
     });
 
     return child;
@@ -76,7 +79,7 @@ export class ChildrenService {
 
   async findPrivateChildrenForParent(parentId: string) {
     const [children, count] = await this.childrenRepository.findAndCount({
-      where: { parent: { id: parentId }, organization: IsNull() },
+      where: { parent: { id: parentId }, classId: IsNull() },
       order: { createdAt: 'DESC' },
     });
     return { children, count };
@@ -87,7 +90,7 @@ export class ChildrenService {
     const [children, count] = await this.childrenRepository.findAndCount({
       where: {
         parent: { id: parentId },
-        organization: { id: organization.id },
+        class: { organization: { id: organization.id } },
       },
       order: { createdAt: 'DESC' },
     });
@@ -212,8 +215,6 @@ export class ChildrenService {
   }
 
   async findAllByOrganization(orgId: string, currentUser: JwtRequestUser) {
-    const organization = await this.organizationsService.findOneOrFail(orgId);
-
     if (
       !(await this.organizationsService.isOrgMember(currentUser.userId, orgId))
     ) {
@@ -222,35 +223,16 @@ export class ChildrenService {
       );
     }
 
-    const children = await this.childrenRepository.find({
-      where: { organization },
-      relations: { class: { grade: true } },
-    });
+    const classes = await this.clsService.findClassesByOrg(orgId);
 
     return {
-      children: children.map((child) => {
-        const evaluationStatus =
-          child.attemptsUsed > 0 ? 'تم التقيم' : 'لم يتم التقيم';
-        const evaluationStatusClassName =
-          child.attemptsUsed > 0 ? 'text-emerald-600' : '';
-        return {
-          id: child.id,
-          name: child.name,
-          className: child?.class?.name ?? 'غير مرتبط بفصل',
-          imgSrc: '/avatar-placeholder.svg',
-          evaluationStatus,
-          evaluationStatusClassName,
-          birthDate: child.birthDate,
-          gender: child.gender,
-          grade: child.class?.grade.name,
-        };
-      }),
+      classes,
     };
   }
 
   async findByUser(userId: string) {
     const [children, count] = await this.childrenRepository.findAndCount({
-      where: { user: { id: userId } },
+      where: { createdBy: { id: userId } },
     });
     return { children, count };
   }

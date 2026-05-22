@@ -8,14 +8,16 @@ import {
   CreateDateColumn,
   UpdateDateColumn,
   Index,
+  Unique,
 } from 'typeorm';
-import { Child } from './child.entity';
-import { SlotKind } from '../enums/child-private-attempt-kind.enum';
-import { SlotStatus } from '../enums/child-private-attempt-status.enum';
+import { SlotStatus } from '../enums/evaluation-slot-status.enum';
+import { Child } from 'src/children/entities/child.entity';
+import { SlotKind } from '../enums/evaluation-slot-kind.enum';
 
-@Entity('child_private_attempts')
-@Index('idx_child_private_attempt_child_status', ['childId', 'status'])
-export class ChildPrivateAttempt {
+@Unique(['id', 'evaluationAttemptId'])
+@Entity('evaluation_slot')
+@Index('idx_evaluation_slot_child_status', ['childId', 'status'])
+export class EvaluationSlot {
   @PrimaryGeneratedColumn('uuid')
   id: string;
 
@@ -23,7 +25,7 @@ export class ChildPrivateAttempt {
   @Column({ type: 'uuid' })
   childId: string;
 
-  @ManyToOne(() => Child, (c) => c.privateAttempts, { onDelete: 'CASCADE' })
+  @ManyToOne(() => Child, (c) => c.slots, { onDelete: 'CASCADE' })
   @JoinColumn({ name: 'childId' })
   child: Child;
 

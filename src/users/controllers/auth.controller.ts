@@ -68,7 +68,11 @@ export class AuthController {
   }
   @Public()
   @Post('refresh')
-  async refresh(@Body('token') token: string) {
+  async refresh(@Body('token') token?: string) {
+    if (!token) {
+      throw new UnauthorizedException('Refresh token missing');
+    }
+
     const payload = this.jwtService.verify<TokenPayload>(token);
 
     const session = await this.sessionsService.findValidSession(payload.sub);
@@ -83,7 +87,9 @@ export class AuthController {
     }
 
     const user = await this.usersService.findById(payload.sub);
+
     if (!user) throw new UnauthorizedException();
+
     await this.sessionsService.deleteSession(session.id);
 
     return this.authService.login(user);

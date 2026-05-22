@@ -8,12 +8,12 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { Child } from './entities/child.entity';
 import { ChildProfile } from './entities/child-profile.entity';
 import { ChildReport } from './entities/child-report.entity';
-import { ChildPrivateAttempt } from './entities/child-private-attempt.entity';
 import { OrganizationsModule } from 'src/organizations/organizations.module';
 import { UsersModule } from 'src/users/users.module';
 import { NotificationsModule } from 'src/notifications/notifications.module';
 import { PaymentsModule } from 'src/payments/payments.module';
 import { ClassesModule } from 'src/classes/classes.module';
+import { EvaluationSlot } from 'src/evaluations/entities/evaluation-slot.entity';
 
 @Module({
   controllers: [
@@ -27,7 +27,7 @@ import { ClassesModule } from 'src/classes/classes.module';
       Child,
       ChildProfile,
       ChildReport,
-      ChildPrivateAttempt,
+      EvaluationSlot,
     ]),
     OrganizationsModule,
     forwardRef(() => ClassesModule),

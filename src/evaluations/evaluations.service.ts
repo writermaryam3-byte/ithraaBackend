@@ -439,10 +439,10 @@ export class EvaluationsService {
 
       const childRow = await manager.getRepository(Child).findOne({
         where: { id: attempt.childId },
-        relations: { organization: true },
+        relations: { class: true },
       });
 
-      if (childRow?.organization == null) {
+      if (childRow?.class == null) {
         await this.privateChildAttempts.markPrivateAttemptCompleted(
           manager,
           attempt.id,
@@ -479,7 +479,7 @@ export class EvaluationsService {
 
     const child = await this.childRepo.findOne({
       where: { id: childId, parent: { id: actor.userId } },
-      relations: { parent: true, organization: true },
+      relations: { parent: true, class: true },
     });
 
     if (!child) {
@@ -497,9 +497,9 @@ export class EvaluationsService {
         age,
       });
 
-    if (child.organization) {
+    if (child.class) {
       qb.andWhere('evaluation.institutionId = :institutionId', {
-        institutionId: child.organization.id,
+        institutionId: child.class.organization.id,
       });
     }
 
@@ -529,14 +529,14 @@ export class EvaluationsService {
 
     const child = await this.childRepo.findOne({
       where: { id: dto.childId, parent: { id: actor.userId } },
-      relations: { parent: true, organization: true },
+      relations: { parent: true, class: true },
     });
 
     if (!child) {
       throw new ForbiddenException('Child not found for this parent');
     }
 
-    const isPrivateChild = child.organization == null;
+    const isPrivateChild = child.class == null;
 
     if (
       !isPrivateChild &&

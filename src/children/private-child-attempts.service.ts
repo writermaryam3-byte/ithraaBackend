@@ -9,16 +9,16 @@ import { OnEvent } from '@nestjs/event-emitter';
 import { InjectRepository } from '@nestjs/typeorm';
 import { DataSource, EntityManager, IsNull, Repository } from 'typeorm';
 import { Child } from './entities/child.entity';
-import { ChildPrivateAttempt } from './entities/child-private-attempt.entity';
 import { NotificationDelivery } from 'src/notifications/enums/notification-delivery.enum';
 import { NotificationsService } from 'src/notifications/notifications.service';
 import { PaymentsService } from 'src/payments/payments.service';
 import type { PaymentSuccessEventPayload } from 'src/payments/payments.events';
 import { PAYMENT_EVENTS } from 'src/payments/payments.events';
 import { AttemptUsageService } from 'src/evaluations/attempt-usage.service';
-import { ChildType } from './enums/child-type.enum';
-import { SlotKind } from './enums/child-private-attempt-kind.enum';
-import { SlotStatus } from './enums/child-private-attempt-status.enum';
+import { SlotKind } from '../evaluations/enums/evaluation-slot-kind.enum';
+import { SlotStatus } from '../evaluations/enums/evaluation-slot-status.enum';
+import { EvaluationSlot } from 'src/evaluations/entities/evaluation-slot.entity';
+import { ChildrenService } from './children.service';
 
 @Injectable()
 export class PrivateChildAttemptsService {
@@ -26,18 +26,19 @@ export class PrivateChildAttemptsService {
     private readonly dataSource: DataSource,
     @InjectRepository(Child)
     private readonly children: Repository<Child>,
-    @InjectRepository(ChildPrivateAttempt)
-    private readonly privateAttempts: Repository<ChildPrivateAttempt>,
+    @InjectRepository(EvaluationSlot)
+    private readonly privateAttempts: Repository<EvaluationSlot>,
     private readonly payments: PaymentsService,
     private readonly notifications: NotificationsService,
     private readonly attemptUsageService: AttemptUsageService,
+    private readonly childrenService: ChildrenService,
     private readonly config: ConfigService,
   ) {}
 
   async assertCanStartAttempt(child: Child, parentId: string) {
     const usage = await this.attemptUsageService.getUsage(child.id, parentId);
 
-    if (child.type === ChildType.INSTITUTIONAL) {
+    if (!(await this.childrenService.isPrivateChild(child.id))) {
       if (usage.totalAttempts >= 2) {
         throw new BadRequestException('Max attempts reached');
       }
@@ -53,7 +54,7 @@ export class PrivateChildAttemptsService {
     parentId: string,
   ): Promise<Child> {
     const child = await this.children.findOne({
-      where: { id: childId, parent: { id: parentId }, organization: IsNull() },
+      where: { id: childId, parent: { id: parentId }, classId: IsNull() },
     });
     if (!child) {
       throw new ForbiddenException('Private child not found for this parent');
@@ -69,7 +70,7 @@ export class PrivateChildAttemptsService {
       );
     }
     await this.dataSource.transaction(async (manager) => {
-      const repo = manager.getRepository(ChildPrivateAttempt);
+      const repo = manager.getRepository(EvaluationSlot);
 
       const existing = await this.privateAttempts.findOne({
         where: {
@@ -265,8 +266,8 @@ export class PrivateChildAttemptsService {
     manager: EntityManager,
     childId: string,
     parentId: string,
-  ): Promise<ChildPrivateAttempt | null> {
-    const repo = manager.getRepository(ChildPrivateAttempt);
+  ): Promise<EvaluationSlot | null> {
+    const repo = manager.getRepository(EvaluationSlot);
 
     return repo.findOne({
       where: {
@@ -288,7 +289,7 @@ export class PrivateChildAttemptsService {
     entitlementId: string,
     evaluationAttemptId: string,
   ): Promise<void> {
-    const repo = manager.getRepository(ChildPrivateAttempt);
+    const repo = manager.getRepository(EvaluationSlot);
     const row = await repo.findOne({
       where: { id: entitlementId },
       lock: { mode: 'pessimistic_write' },
@@ -303,7 +304,7 @@ export class PrivateChildAttemptsService {
     evaluationAttemptId: string,
     childId: string,
   ): Promise<void> {
-    const repo = manager.getRepository(ChildPrivateAttempt);
+    const repo = manager.getRepository(EvaluationSlot);
     const row = await repo.findOne({
       where: { evaluationAttemptId },
       lock: { mode: 'pessimistic_write' },
@@ -332,7 +333,7 @@ export class PrivateChildAttemptsService {
     let childName: string | null = null;
 
     await this.dataSource.transaction(async (manager) => {
-      const repo = manager.getRepository(ChildPrivateAttempt);
+      const repo = manager.getRepository(EvaluationSlot);
       const row = await repo.findOne({
         where: { id: privateId },
         relations: { child: true },

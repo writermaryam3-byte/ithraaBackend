@@ -147,7 +147,6 @@ export class AttemptsController {
     UserRole.PARENT,
     UserRole.ADMIN,
     UserRole.ORGANIZATIONOWNER,
-    UserRole.EMPLOYEE,
     UserRole.TEACHER,
   )
   @Get(':id')

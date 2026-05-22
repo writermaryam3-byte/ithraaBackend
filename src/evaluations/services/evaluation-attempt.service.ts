@@ -1,6 +1,6 @@
 import { Injectable, BadRequestException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { SlotStatus } from 'src/children/enums/child-private-attempt-status.enum';
+import { SlotStatus } from 'src/evaluations/enums/evaluation-slot-status.enum';
 import { PrivateChildAttemptsService } from 'src/children/private-child-attempts.service';
 import { DataSource, Repository } from 'typeorm';
 import { AttemptUsageService } from '../attempt-usage.service';
@@ -17,7 +17,7 @@ export class EvaluationAttemptService {
 
     private readonly slotService: PrivateChildAttemptsService,
     private readonly usageService: AttemptUsageService,
-  ) {}
+  ) { }
   async startAttempt(evaluationId: string, childId: string, parentId: string) {
     return this.dataSource.transaction(async (manager) => {
       const repo = manager.getRepository(EvaluationAttempt);
