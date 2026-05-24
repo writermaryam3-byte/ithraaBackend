@@ -7,6 +7,8 @@ import {
   ManyToOne,
   OneToMany,
   Entity,
+  Index,
+  JoinColumn,
 } from 'typeorm';
 
 @Entity('grades')
@@ -17,7 +19,12 @@ export class Grade {
   @Column()
   name: GradeName;
 
+  @Index()
+  @Column({ type: 'uuid' })
+  organizationId: string;
+
   @ManyToOne(() => Organization, (org) => org.grades, { onDelete: 'CASCADE' })
+  @JoinColumn({ name: 'organizationId' })
   organization: Organization;
 
   @OneToMany(() => Class, (cls) => cls.grade)
