@@ -479,7 +479,7 @@ export class EvaluationsService {
 
     const child = await this.childRepo.findOne({
       where: { id: childId, parent: { id: actor.userId } },
-      relations: { parent: true, class: true },
+      relations: { parent: true, class: { organization: true } },
     });
 
     if (!child) {
@@ -529,7 +529,7 @@ export class EvaluationsService {
 
     const child = await this.childRepo.findOne({
       where: { id: dto.childId, parent: { id: actor.userId } },
-      relations: { parent: true, class: true },
+      relations: { parent: true, class: { organization: true } },
     });
 
     if (!child) {
@@ -737,7 +737,7 @@ export class EvaluationsService {
         approval: true,
         evaluation: true,
         child: {
-          class: true,
+          class: { organization: true },
         },
       },
     });
@@ -891,7 +891,7 @@ export class EvaluationsService {
         approval: true,
         evaluation: true,
         child: {
-          class: true,
+          class: { organization: true },
         },
       },
     });

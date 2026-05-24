@@ -1,4 +1,4 @@
-import { Module } from '@nestjs/common';
+import { forwardRef, Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { EvaluationsService } from './evaluations.service';
 import { EvaluationsController } from './evaluations.controller';
@@ -34,7 +34,7 @@ import { AttemptUsageService } from './attempt-usage.service';
       Organization,
       EvaluationDimension,
     ]),
-    ChildrenModule,
+    forwardRef(() => ChildrenModule),
     NotificationsModule,
   ],
   controllers: [
@@ -48,5 +48,6 @@ import { AttemptUsageService } from './attempt-usage.service';
     OwnerEvaluationResultsService,
     AttemptUsageService,
   ],
+  exports: [AttemptUsageService],
 })
 export class EvaluationsModule {}

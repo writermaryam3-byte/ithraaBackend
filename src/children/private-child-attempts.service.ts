@@ -69,10 +69,10 @@ export class PrivateChildAttemptsService {
         'Main attempt already started or completed for this child',
       );
     }
-    await this.dataSource.transaction(async (manager) => {
+    return this.dataSource.transaction(async (manager) => {
       const repo = manager.getRepository(EvaluationSlot);
 
-      const existing = await this.privateAttempts.findOne({
+      const existing = await repo.findOne({
         where: {
           childId,
           parentId,
@@ -205,29 +205,40 @@ export class PrivateChildAttemptsService {
     if (!attempt.requiresApproval) {
       throw new BadRequestException('Extra attempt does not require approval');
     }
-    await this.dataSource.transaction(async (manager) => {
-      attempt.transitionTo(SlotStatus.AWAITING_PAYMENT);
+    return this.dataSource.transaction(async (manager) => {
+      const repo = manager.getRepository(EvaluationSlot);
+      const locked = await repo.findOne({
+        where: { id: attempt.id },
+        relations: { child: true, parent: true },
+        lock: { mode: 'pessimistic_write' },
+      });
+      if (!locked) throw new NotFoundException('Attempt request not found');
+      if (locked.status !== SlotStatus.REQUESTED) {
+        throw new BadRequestException('Extra attempt is not awaiting approval');
+      }
+
+      locked.transitionTo(SlotStatus.AWAITING_PAYMENT);
 
       const checkout = await this.payments.createPaymentForPrivateExtraAttempt(
-        attempt.parentId,
+        locked.parentId,
         {
-          childId: attempt.childId,
-          privateAttemptId: attempt.id,
+          childId: locked.childId,
+          privateAttemptId: locked.id,
           amount: this.extraAttemptPriceSar(),
           description: 'Extra child evaluation attempt',
         },
       );
-      attempt.paymentId = checkout.id;
+      locked.paymentId = checkout.id;
 
-      await manager.save(attempt);
+      await repo.save(locked);
       await this.notifyPaymentRequired(
-        attempt.parentId,
-        attempt.child.name,
+        locked.parentId,
+        locked.child.name,
         checkout.checkoutUrl,
         checkout.expiresAt,
       );
       return {
-        attempt,
+        attempt: locked,
         payment: checkout,
       };
     });
@@ -295,6 +306,7 @@ export class PrivateChildAttemptsService {
       lock: { mode: 'pessimistic_write' },
     });
     if (!row) throw new NotFoundException('Entitlement not found');
+    row.transitionTo(SlotStatus.CONSUMED);
     row.evaluationAttemptId = evaluationAttemptId;
     await repo.save(row);
   }

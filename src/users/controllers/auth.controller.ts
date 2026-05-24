@@ -75,13 +75,17 @@ export class AuthController {
 
     const payload = this.jwtService.verify<TokenPayload>(token);
 
-    const session = await this.sessionsService.findValidSession(payload.sub);
+    const sessions = await this.sessionsService.findValidSessions(payload.sub);
+    const matchedSession = (
+      await Promise.all(
+        sessions.map(async (session) => ({
+          session,
+          valid: await bcrypt.compare(token, session.refreshTokenHash),
+        })),
+      )
+    ).find((entry) => entry.valid)?.session;
 
-    if (!session) throw new UnauthorizedException();
-
-    const valid = await bcrypt.compare(token, session.refreshTokenHash);
-
-    if (!valid) {
+    if (!matchedSession) {
       await this.sessionsService.deleteAllUserSessions(payload.sub);
       throw new UnauthorizedException('Session compromised');
     }
@@ -90,7 +94,7 @@ export class AuthController {
 
     if (!user) throw new UnauthorizedException();
 
-    await this.sessionsService.deleteSession(session.id);
+    await this.sessionsService.deleteSession(matchedSession.id);
 
     return this.authService.login(user);
   }

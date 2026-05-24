@@ -31,7 +31,7 @@ export class Child {
   gender: Gender;
 
   @Index()
-  @Column({ type: 'uuid' })
+  @Column({ type: 'uuid', nullable: true })
   classId: string | null;
 
   @ManyToOne(() => Class, (cls) => cls.children, {
@@ -53,7 +53,9 @@ export class Child {
   @Column({ type: 'uuid' })
   parentId: string;
 
-  @ManyToOne(() => User, (user) => user.children, { onDelete: 'CASCADE' })
+  @ManyToOne(() => User, (user) => user.parentChildren, {
+    onDelete: 'CASCADE',
+  })
   @JoinColumn({ name: 'parentId' })
   parent: User;
 

@@ -5,13 +5,10 @@ import { ChildrenModule } from './children/children.module';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { UsersModule } from './users/users.module';
 import { OrganizationsModule } from './organizations/organizations.module';
-import { TestsModule } from './tests/tests.module';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { SessionModule } from './session/session.module';
 import { APP_GUARD, APP_INTERCEPTOR } from '@nestjs/core';
 
-import { UploadsModule } from './uploads/uploads.module';
-import { MailerModule } from './mailer/mailer.module';
 import { JwtAuthGuard } from './users/guards/auth.guard';
 import { RolesGuard } from './users/guards/roles.guard';
 import { ClassesModule } from './classes/classes.module';
@@ -49,7 +46,7 @@ import { DealsModule } from 'src/deals/deals.module';
     TypeOrmModule.forRoot({
       type: 'postgres',
       host: process.env.DB_HOST,
-      port: Number(process.env.DB_HOST),
+      port: Number(process.env.DB_PORT ?? 5432),
       username: process.env.DB_USERNAME,
       password: process.env.DB_PASSWORD,
       database: process.env.DB_DATABASE,
@@ -60,10 +57,7 @@ import { DealsModule } from 'src/deals/deals.module';
     }),
     UsersModule,
     OrganizationsModule,
-    TestsModule,
     SessionModule,
-    UploadsModule,
-    MailerModule,
     ClassesModule,
     GradesModule,
     NotificationsModule,

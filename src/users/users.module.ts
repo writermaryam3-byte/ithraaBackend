@@ -12,7 +12,6 @@ import { AuthController } from './controllers/auth.controller';
 import { ConfigService } from '@nestjs/config';
 import { JwtModule } from '@nestjs/jwt';
 import { PassportModule } from '@nestjs/passport';
-import { MailerModule } from 'src/mailer/mailer.module';
 import { SessionModule } from 'src/session/session.module';
 import { UsersService } from './services/users.service';
 import { TeachersController } from './controllers/teachers.controller';
@@ -43,7 +42,6 @@ import { OrganizationsModule } from 'src/organizations/organizations.module';
   ],
   imports: [
     TypeOrmModule.forFeature([User, Role, Teacher, Enricher]),
-    MailerModule,
     OrganizationsModule,
     SessionModule,
     PassportModule,

@@ -58,7 +58,8 @@ export class AuthProvider {
       throw new BadRequestException('Invalid token type');
     }
 
-    const user = await this.usersService.findById(payload.userId);
+    const userId = payload.userId ?? payload.sub;
+    const user = await this.usersService.findById(userId);
 
     if (!user) {
       throw new NotFoundException('User not found');

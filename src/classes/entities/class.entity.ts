@@ -32,7 +32,7 @@ export class Class {
   @OneToMany(() => Child, (child) => child.class)
   children: Child[];
 
-  @ManyToOne(() => Organization, (org) => org.grades, { onDelete: 'CASCADE' })
+  @ManyToOne(() => Organization, (org) => org.classes, { onDelete: 'CASCADE' })
   @JoinColumn({ name: 'orgId' })
   organization: Organization;
 }

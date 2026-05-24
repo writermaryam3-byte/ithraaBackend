@@ -104,7 +104,10 @@ export class ClassesService {
     };
   }
   async findOneOrFail(id: string) {
-    const cls = await this.classesRepo.findOneBy({ id });
+    const cls = await this.classesRepo.findOne({
+      where: { id },
+      relations: { organization: true },
+    });
     if (!cls) throw new NotFoundException(`class with ID ${id} not found`);
     return cls;
   }

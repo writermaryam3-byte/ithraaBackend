@@ -29,7 +29,7 @@ export class SessionController {
 
   @Get(':id')
   findOne(@Param('id', new ParseUUIDPipe()) id: string) {
-    return this.sessionService.findOne(+id);
+    return this.sessionService.findOne(id);
   }
 
   // @Patch(':id')

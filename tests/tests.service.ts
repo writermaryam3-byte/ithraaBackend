@@ -6,7 +6,7 @@ import {
 } from './dto/create-test.dto';
 import { UpdateTestDto } from './dto/update-test.dto';
 import { Repository } from 'typeorm';
-import { Test } from '@nestjs/testing';
+import { Test } from './entities/test.entity';
 import { InjectRepository } from '@nestjs/typeorm';
 import { TestAssignment } from './entities/test-assignment.entity';
 import { TestResult } from './entities/test-result.entity';
@@ -114,11 +114,21 @@ export class TestsService {
     return assignment;
   }
 
-  update(id: number, updateTestDto: UpdateTestDto) {
-    return `This action updates a #${id} test`;
+  async update(id: string, updateTestDto: UpdateTestDto) {
+    const test = await this.testRepo.preload({
+      id,
+      ...updateTestDto,
+      questionNo: updateTestDto.questions?.length,
+    });
+    if (!test) throw new NotFoundException('Test not found');
+    return this.testRepo.save(test);
   }
 
-  remove(id: number) {
-    return `This action removes a #${id} test`;
+  async remove(id: string) {
+    const result = await this.testRepo.delete(id);
+    if (result.affected === 0) {
+      throw new NotFoundException('Test not found');
+    }
+    return { message: 'Deleted successfully' };
   }
 }

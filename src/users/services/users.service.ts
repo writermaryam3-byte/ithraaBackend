@@ -30,7 +30,7 @@ export class UsersService {
   }
   async create(dto: CreateUserDto, roles: UserRole[], manager: EntityManager) {
     const hashed = await bcrypt.hash(dto.password, 10);
-    const dbRoles = await this.roleRepo.find({
+    const dbRoles = await manager.getRepository(Role).find({
       where: roles.map((r) => ({ name: r })),
     });
     const user = manager.create(User, {

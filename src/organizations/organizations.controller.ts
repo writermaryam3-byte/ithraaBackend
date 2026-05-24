@@ -26,14 +26,14 @@ export class OrganizationsController {
     return this.organizationsService.findAll();
   }
 
-  @Get(':id')
-  findOne(@Param('id', new ParseUUIDPipe()) id: string) {
-    return this.organizationsService.findOne(+id);
-  }
-
   @Get('owner/:ownerId')
   findByOwner(@Param('ownerId', new ParseUUIDPipe()) ownerId: string) {
     return this.organizationsService.findByOwner(ownerId);
+  }
+
+  @Get(':id')
+  findOne(@Param('id', new ParseUUIDPipe()) id: string) {
+    return this.organizationsService.findOne(id);
   }
 
   @ApiOperation({
@@ -49,6 +49,6 @@ export class OrganizationsController {
 
   @Delete(':id')
   remove(@Param('id', new ParseUUIDPipe()) id: string) {
-    return this.organizationsService.remove(+id);
+    return this.organizationsService.remove(id);
   }
 }

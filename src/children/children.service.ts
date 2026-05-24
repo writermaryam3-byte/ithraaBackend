@@ -69,8 +69,7 @@ export class ChildrenService {
       name: dto.name,
       birthDate: dto.birthDate,
       gender: dto.gender,
-      organization: null,
-      user: { id: parentId },
+      createdBy: { id: parentId },
       parent: { id: parentId },
     });
 
@@ -103,6 +102,21 @@ export class ChildrenService {
     currentUser: JwtRequestUser,
   ) {
     return this.dataSource.transaction(async (manager) => {
+      const { classId } = createChildWithParentDto.child;
+      if (classId) {
+        const cls = await this.clsService.findOneOrFail(classId);
+        if (
+          !(await this.organizationsService.isOrgMember(
+            currentUser.userId,
+            cls.organization.id,
+          ))
+        ) {
+          throw new ForbiddenException(
+            'You are not allowed to add children to this class',
+          );
+        }
+      }
+
       // check user (creator)
       await this.usersService.findById(currentUser.userId);
 
@@ -170,11 +184,9 @@ export class ChildrenService {
         birthDate: createChildWithParentDto.child.birthDate,
         gender: createChildWithParentDto.child.gender,
 
-        class: createChildWithParentDto.child.classId
-          ? { id: createChildWithParentDto.child.classId }
-          : null,
+        class: classId ? { id: classId } : null,
 
-        user: { id: currentUser.userId },
+        createdBy: { id: currentUser.userId },
         parent: { id: parent.id },
       });
 
@@ -217,7 +229,7 @@ export class ChildrenService {
   async findOne(id: string) {
     const child = await this.childrenRepository.findOne({
       where: { id },
-      relations: ['organization', 'class', 'parent'],
+      relations: { class: { organization: true }, parent: true },
     });
 
     if (!child) {

@@ -14,6 +14,7 @@ import { NotificationsModule } from 'src/notifications/notifications.module';
 import { PaymentsModule } from 'src/payments/payments.module';
 import { ClassesModule } from 'src/classes/classes.module';
 import { EvaluationSlot } from 'src/evaluations/entities/evaluation-slot.entity';
+import { EvaluationsModule } from 'src/evaluations/evaluations.module';
 
 @Module({
   controllers: [
@@ -34,6 +35,7 @@ import { EvaluationSlot } from 'src/evaluations/entities/evaluation-slot.entity'
     UsersModule,
     NotificationsModule,
     forwardRef(() => PaymentsModule),
+    forwardRef(() => EvaluationsModule),
   ],
   exports: [TypeOrmModule, ChildrenService, PrivateChildAttemptsService],
 })

@@ -61,12 +61,12 @@ export class TestsController {
     @Param('id', new ParseUUIDPipe()) id: string,
     @Body() updateTestDto: UpdateTestDto,
   ) {
-    return this.testsService.update(+id, updateTestDto);
+    return this.testsService.update(id, updateTestDto);
   }
 
   @Roles(UserRole.ADMIN)
   @Delete(':id')
   remove(@Param('id', new ParseUUIDPipe()) id: string) {
-    return this.testsService.remove(+id);
+    return this.testsService.remove(id);
   }
 }
