@@ -540,7 +540,7 @@ export class EvaluationsService {
 
     if (
       !isPrivateChild &&
-      evaluation.institutionId !== child.organization?.id
+      evaluation.institutionId !== child.class?.organization?.id
     ) {
       throw new ForbiddenException(
         'Evaluation does not belong to child institution',
@@ -737,7 +737,6 @@ export class EvaluationsService {
         approval: true,
         evaluation: true,
         child: {
-          organization: true,
           class: true,
         },
       },
@@ -854,10 +853,10 @@ export class EvaluationsService {
 
       const childRow = await manager.getRepository(Child).findOne({
         where: { id: locked.childId },
-        relations: { organization: true },
+        relations: { class: { organization: true } },
       });
 
-      if (childRow?.organization == null) {
+      if (childRow?.classId == null) {
         await this.privateChildAttempts.markPrivateAttemptCompleted(
           manager,
           locked.id,
@@ -892,7 +891,6 @@ export class EvaluationsService {
         approval: true,
         evaluation: true,
         child: {
-          organization: true,
           class: true,
         },
       },

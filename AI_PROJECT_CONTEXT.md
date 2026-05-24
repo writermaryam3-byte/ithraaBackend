@@ -1,713 +1,812 @@
-# AI Project Context
+# 1. Project Overview
 
-Authoritative architecture notes for future AI agents working on this NestJS backend. This file was reverse engineered from `src` on 2026-05-19. Treat it as a map, not a replacement for tests when changing risky flows.
+This repository is a NestJS 11 backend for an educational/child-development platform. The system manages organizations, organization owners, teachers, parents, children, evaluations, payments for private extra attempts, in-app/email notifications, and a small deals/proposals marketplace for enrichment providers.
 
-## 1. Project Overview
+The main business domain is child evaluation and institutional child management:
 
-Ithraa backend is a NestJS + TypeORM API for managing children, parents, organizations, classes, evaluations, payments, notifications, and service-provider deals. The main business domain is educational/talent evaluation for children, with two operating modes:
+- Organizations sign up and own grades/classes/teachers.
+- Parents own children and start/submit evaluations for those children.
+- Organization owners view class-level evaluation reporting and can send reminders.
+- Admins create evaluation definitions, approve submitted evaluation attempts, seed roles, and approve paid extra private attempts.
+- Enrichers/service providers receive deal opportunities and submit proposals.
 
-- Institutional mode: an organization owner/teacher creates or manages children attached to an organization/class. Parents submit evaluations assigned to their children. Admin approves submitted results. Organization owners view class-level reports.
-- Private-parent mode: a parent creates private children outside any organization, opens limited free evaluation slots, requests retakes, and can request paid extra attempts after admin approval and payment.
+Main actors are defined in [src/common/enums/role.enum.ts](src/common/enums/role.enum.ts):
 
-Main actors:
+```ts
+export enum UserRole {
+  ADMIN = 'ADMIN',
+  ORGANIZATIONOWNER = 'ORGANIZATIONOWNER',
+  ENRICHER = 'ENRICHER',
+  TEACHER = 'TEACHER',
+  PARENT = 'PARENT',
+}
+```
 
-- `ADMIN`: creates evaluations, seeds roles, lists/approves attempts, approves paid extra-attempt requests, manages activities/tests.
-- `ORGANIZATIONOWNER`: owns exactly one `Organization`, creates teachers/classes/grades/children, sees organization reports, creates deals.
-- `TEACHER`: belongs to an organization and can access some organization child/deal flows.
-- `PARENT`: owns children through `Child.parent`; starts/saves/submits evaluation attempts; manages private children.
-- `ENRICHER`: service provider; receives deal notifications and submits/updates proposals.
-- `EMPLOYEE`: appears in roles and some route permissions, but concrete employee entity/workflow is not implemented.
+Important caveat: multiple files still reference `UserRole.EMPLOYEE`, but that enum member does not exist. Current `cmd /c npm run build` fails because of this and because evaluation services reference missing `Child.organization` / `Child.user` relations.
 
 Core workflows:
 
-1. Sign up organization owner or enricher under `/api/auth/*`.
-2. Organization owner creates grades/classes/teachers and creates organization children with parent accounts.
-3. Parent lists available evaluations by child age/institution and starts attempts.
-4. Parent saves progress or submits; submission calculates score/result and emits events.
-5. Admin approves submitted attempts; parent and owner-facing reports use approved results.
-6. Private parent opens main/retake/extra evaluation slots; extra attempts require admin approval plus payment.
-7. Notifications are queued through Bull and delivered in-app and/or by email.
-8. Organizations create deals for activities; enrichers submit proposals.
+- Auth: phone/password login, organization/enricher signup, JWT access tokens, refresh-token sessions, email verification through queued email.
+- Institutional management: organization owners create grades, classes, teachers, and children with auto-created parent accounts.
+- Private parent flow: parent creates up to two private children, opens a main evaluation slot, starts an evaluation, submits answers, optionally requests retake and paid extra attempts.
+- Evaluation flow: admin creates evaluation schema; parent starts attempt; parent saves progress; submit scores answers; admin approves; listeners notify parent.
+- Payment flow: checkout session through Moyasar; webhook is signature-checked, deduplicated, queued, verified against provider, then emits `payment.success`/`payment.failed`.
+- Notification flow: code enqueues Bull jobs; queue worker sends email through Resend and/or persists in-app notifications.
+- Deals flow: organization-side actor creates deal for an activity; enrichers submit/update proposals before deadline; notifications are sent to enrichers and organization owners.
 
-## 2. System Architecture
+# 2. System Architecture
 
-High-level architecture:
+The application is a modular NestJS monolith using TypeORM repositories over PostgreSQL, Bull/Redis queues, EventEmitter2 domain events, and Resend/Moyasar external integrations.
 
-```text
-HTTP controllers
-  -> Nest services / providers
-    -> TypeORM repositories + DataSource transactions
-    -> EventEmitter2 domain events
-    -> Bull queues: notifications, payment-processing
-    -> external providers: Resend, Moyasar
+Entry points:
+
+- [src/main.ts](src/main.ts) creates the Nest app with `rawBody: true`, global `ValidationPipe`, CORS `origin: '*'`, global prefix `api`, and Swagger at `/api-docs`.
+- [src/app.module.ts](src/app.module.ts) wires global `JwtAuthGuard`, global `RolesGuard`, `ClassSerializerInterceptor`, TypeORM, Bull, scheduler, and all domain modules.
+
+High-level flow:
+
+```mermaid
+flowchart LR
+  API[HTTP Controllers] --> Guards[JWT + Roles Guards]
+  Guards --> Services[Domain Services]
+  Services --> TypeORM[(Postgres via TypeORM)]
+  Services --> Events[EventEmitter2]
+  Services --> Queues[Bull Queues]
+  Events --> Listeners[Evaluation/Payment Listeners]
+  Queues --> Workers[Notification + Payment Processors]
+  Workers --> External[Resend / Moyasar]
 ```
 
-Bootstrap and global behavior:
+Important infrastructure modules:
 
-- `src/main.ts` sets global prefix `/api`, enables CORS for all origins, uses `ValidationPipe` with `whitelist`, `forbidNonWhitelisted`, `transform`, and custom flattened error output.
-- `src/app.module.ts` installs global `JwtAuthGuard`, global `RolesGuard`, and `ClassSerializerInterceptor`.
-- Public endpoints use `@Public()` from `src/users/decorators/public.decorator.ts`.
-- TypeORM uses `autoLoadEntities: true`; no migration files were found in `src`. Runtime schema currently depends on `synchronize`.
-- Bull uses Redis from `REDIS_HOST`, `REDIS_PORT`, `REDIS_PASSWORD`, `REDIS_TLS`.
-- EventEmitter2 uses wildcard support with `.` delimiter.
+- `ConfigModule.forRoot({ isGlobal: true })` makes environment config available.
+- `BullModule.forRootAsync` configures Redis from `REDIS_HOST`, `REDIS_PORT`, `REDIS_PASSWORD`, `REDIS_TLS`.
+- `EventEmitterModule.forRoot({ wildcard: true, delimiter: '.', maxListeners: 50 })` supports events such as `evaluation.submitted`.
+- `ScheduleModule.forRoot()` enables payment expiry and retry cron jobs.
+
+Configuration risk in [src/app.module.ts](src/app.module.ts): TypeORM uses `port: Number(process.env.DB_HOST)` instead of `DB_PORT`, and `synchronize: Boolean(process.env.DB_SYNCHRONIZE)` treats any non-empty string, including `"false"`, as true.
 
 Module responsibilities:
 
-- `UsersModule`: users, roles, auth, signup strategies, teachers, enrichers, parents placeholders.
-- `SessionModule`: refresh token sessions.
-- `OrganizationsModule`: organization lookup/update helpers.
-- `GradesModule` / `ClassesModule`: school structure.
-- `ChildrenModule`: organization child creation, private child creation, private attempt entitlements.
-- `EvaluationsModule`: evaluation definitions, attempts, scoring, admin approval, owner reports.
-- `PaymentsModule`: payment creation, Moyasar integration, webhook idempotency, retries, payment events.
-- `NotificationsModule`: in-app/email notification queue and evaluation event listeners.
-- `DealsModule`: activities, deals, proposals for service providers.
-- `TestsModule`: older/basic test/assignment/result model separate from the richer evaluation system.
-- `UploadsModule`, `MailerModule`: utility modules; both have thin/direct endpoints.
-
-Important module coupling:
-
-- `ChildrenModule` and `ClassesModule` use `forwardRef` because class assignment calls child services and child creation validates classes.
-- `ChildrenModule` and `PaymentsModule` use `forwardRef` because private extra attempts create/retry payments and payment success unlocks private attempts.
-- `NotificationsModule` imports `UsersModule` with `forwardRef`; `AuthProvider` also injects `NotificationsService`, so auth and notifications are tightly coupled.
-- `EvaluationsService` directly calls `PrivateChildAttemptsService`, tying evaluation attempt creation/submission to private entitlement state.
+- `UsersModule`: users, roles, auth, signup strategies, teachers, parent/enricher placeholder controllers.
+- `OrganizationsModule`: organization lookup/update and membership checks.
+- `GradesModule` / `ClassesModule`: organization-owned academic structure.
+- `ChildrenModule`: child CRUD, private child creation, private attempt entitlement slots, payment-success slot unlocks.
+- `EvaluationsModule`: evaluation definitions, attempts, answers, scoring, approvals, organization owner reports.
+- `PaymentsModule`: checkout creation, Moyasar provider, webhook queue, payment expiry/retry cron, payment success/failure events.
+- `NotificationsModule`: in-app notifications, email dispatch, queue processor, evaluation event listeners.
+- `DealsModule`: activities, deals, proposals.
+- `TestsModule`: older/simple test-assignment system separate from the newer evaluation system.
+- `UploadsModule` and `MailerModule`: basic file upload and direct mail endpoints.
 
 Event-driven behavior:
 
-- Evaluation events in `src/evaluations/evaluations.events.ts`:
-  - `evaluation.submitted`
-  - `evaluation.approved`
-  - `evaluation.limit_reached`
-- Payment events in `src/payments/payments.events.ts`:
-  - `payment.success`
-  - `payment.failed`
-- `EvaluationNotificationsListener` converts evaluation events into in-app notifications.
-- `PrivateChildAttemptsService` listens to `payment.success` and unlocks paid private extra attempts.
-- Payment webhooks are not processed inline; they are verified/deduplicated, queued, provider-verified, persisted, then converted into success/failure jobs/events.
+- [src/evaluations/evaluations.events.ts](src/evaluations/evaluations.events.ts): `evaluation.submitted`, `evaluation.approved`, `evaluation.limit_reached`.
+- [src/notifications/listeners/evaluation-notifications.listener.ts](src/notifications/listeners/evaluation-notifications.listener.ts): turns evaluation events into in-app notifications.
+- [src/payments/payments.events.ts](src/payments/payments.events.ts): `payment.success`, `payment.failed`.
+- [src/children/private-child-attempts.service.ts](src/children/private-child-attempts.service.ts): listens to `payment.success` and unlocks private extra attempt slots.
 
-## 3. Database & Entities
+# 3. Database & Entities
 
-Most primary keys are UUIDs. Relations are mostly TypeORM entity relations with explicit `@JoinColumn` only where a specific FK column name is desired. Many entities rely on TypeORM default FK column naming when `@JoinColumn` is absent.
+There are no TypeORM migration files in the repository. Schema is inferred from decorators and currently depends on `synchronize` if enabled.
 
-### Users and roles
+## Users, Roles, Organizations
 
-`src/users/entities/user.entity.ts` (`users`):
+[src/users/entities/user.entity.ts](src/users/entities/user.entity.ts)
 
-- Purpose: core login/profile/account identity.
-- Fields: `name`, unique `email`, unique `phone`, `password` excluded by class-transformer, email/phone verification flags.
-- `roles`: `ManyToMany(Role)` with eager loading and default join table.
-- `ownedOrganization`: `OneToOne(Organization.owner)` for organization owners.
-- `organization`: nullable `ManyToOne(Organization.users)` for membership; `onDelete: SET NULL`.
-- `enricher`, `teacher`: one-to-one profile extensions.
-- `children`: `OneToMany(Child.user)` where user created/owns institutional record.
-- `parentChildren`: intended `OneToMany(Child.parent)`, but `Child.parent` currently maps to `(user) => user.children`, not `parentChildren`. This is a real relationship bug.
+- Purpose: base account for all actors.
+- Columns: `id`, `name`, unique `email`, unique `phone`, `password`, verification flags, timestamps.
+- Roles: `ManyToMany(User <-> Role)` with eager loading and a generated join table.
+- Ownership: a user can own one organization via `ownedOrganization`.
+- Membership: a user can belong to an organization via nullable `ManyToOne organization`, with `onDelete: SET NULL`.
+- Children: defines `children` inverse as `(child) => child.user`, but `Child` has no `user` property. This is a real compile/schema mismatch. `parentChildren` points to `(child) => child.parent`.
 
-`src/users/entities/user-roles.entity.ts` (`roles`):
+[src/users/entities/user-roles.entity.ts](src/users/entities/user-roles.entity.ts)
 
-- Purpose: role catalog, unique `name: UserRole`.
-- Users are linked via many-to-many join table owned by `User.roles`.
-- `UsersService.onModuleInit()` calls `seedRoles()`.
+- `Role` has unique `name` and inverse many-to-many users.
+- `UsersService.onModuleInit()` seeds roles, but currently includes missing `UserRole.EMPLOYEE`.
 
-`src/users/entities/teacher.entity.ts` (`teachers`):
+[src/organizations/entities/organization.entity.ts](src/organizations/entities/organization.entity.ts)
 
-- Purpose: organization teacher profile.
-- Scalar `userId`, `orgId`; `OneToOne(User)` with `@JoinColumn({ name: 'userId' })`, cascade delete; `ManyToOne(Organization)` with `@JoinColumn({ name: 'orgId' })`, cascade delete.
-- `classes`: `OneToMany('Class', 'teacher')`.
-- Risk: `OrganizationsService.isOrgMember()` compares `teacher.id` to `userId`, but `teacher.id` is not the `User.id`.
+- Purpose: institution owned by a user.
+- Columns: `organizationName`, `organizationType`, `approvalStatus`, unique `ownerId`.
+- `OneToOne owner` uses `@JoinColumn({ name: 'ownerId' })` and `onDelete: CASCADE`, so deleting owner deletes organization.
+- `OneToMany users`, `teachers`, `parents`, `grades`, `classes` are inverse relations. `parents` and `users` both use `User.organization`.
+- Approval status defaults to `pending`.
 
-`src/users/entities/enricher.entity.ts` (`enrichers`):
+[src/users/entities/teacher.entity.ts](src/users/entities/teacher.entity.ts)
 
-- Purpose: service provider profile.
-- `OneToOne(User)` with cascade delete; `approvalStatus` defaults `pending`.
-- No implemented approval workflow beyond field existence.
+- Purpose: teacher profile attached to a user and organization.
+- Has scalar `userId`, `orgId`.
+- `OneToOne user` with `@JoinColumn({ name: 'userId' })`, `onDelete: CASCADE`.
+- `ManyToOne organization` with `@JoinColumn({ name: 'orgId' })`, `onDelete: CASCADE`.
+- `OneToMany classes` inverse.
 
-### Organizations, classes, grades
+[src/users/entities/enricher.entity.ts](src/users/entities/enricher.entity.ts)
 
-`src/organizations/entities/organization.entity.ts` (`organizations`):
+- Purpose: service provider/enricher profile.
+- `OneToOne user` with cascade delete and default approval status `pending`.
 
-- Purpose: institution/owner boundary.
-- Fields: `organizationName`, `organizationType`, `approvalStatus`, unique `ownerId`.
-- `owner`: `OneToOne(User)` with `@JoinColumn({ name: 'ownerId' })`, cascade delete.
-- `users`, `teachers`, `parents`, `grades`, `classes`: `OneToMany` collections.
-- `parents` duplicates `users` over the same `User.organization` inverse relation.
+## Academic Structure
 
-`src/grades/entities/grade.entity.ts` (`grades`):
+[src/grades/entities/grade.entity.ts](src/grades/entities/grade.entity.ts)
 
-- Purpose: grade level within organization. `name` uses `GradeName` enum, currently only `grade-1`.
-- `ManyToOne(Organization)` cascade delete; `OneToMany(Class)`.
+- Purpose: organization-owned grade.
+- `ManyToOne organization` with `onDelete: CASCADE`.
+- `OneToMany classes`.
+- `name` is typed as `GradeName` but stored with a plain `@Column()` rather than TypeORM enum metadata.
 
-`src/classes/entities/class.entity.ts` (`classes`):
+[src/classes/entities/class.entity.ts](src/classes/entities/class.entity.ts)
 
-- Purpose: classroom grouping.
-- `ManyToOne(Grade)` cascade delete.
-- nullable `ManyToOne(Teacher)` with `@JoinColumn({ name: 'teacherId' })`, `onDelete: SET NULL`.
-- `ManyToOne(Organization)` with `@JoinColumn({ name: 'orgId' })`, cascade delete. Inverse incorrectly points to `org.grades` instead of `org.classes`.
-- `OneToMany(Child.class)`.
+- Purpose: grade-level class under an organization.
+- `ManyToOne grade`, `onDelete: CASCADE`.
+- `ManyToOne teacher`, nullable, `onDelete: SET NULL`, joined by `teacherId`.
+- `ManyToOne organization`, `onDelete: CASCADE`, joined by `orgId`.
+- `OneToMany children`.
+- Hidden coupling: class stores both `grade` and `organization`; grade also stores organization. Code assumes they match, but no DB constraint enforces it.
+- Mapping bug: the `Class.organization` inverse currently points to `(org) => org.grades`, not `(org) => org.classes`.
 
-### Children
+## Children
 
-`src/children/entities/child.entity.ts` (`children`):
+[src/children/entities/child.entity.ts](src/children/entities/child.entity.ts)
 
-- Purpose: child profile for either institution or private parent.
-- Fields: `name`, `birthDate`, `gender`, private attempt counters `attemptsUsed`, `retakeUsed`.
-- `organization`: nullable `ManyToOne(Organization)` with `@JoinColumn({ name: 'organizationId' })`, cascade delete. `null` means private child.
-- `class`: nullable `ManyToOne(Class)` with `@JoinColumn({ name: 'classId' })`, cascade delete.
-- `user`: `ManyToOne(User)` with `@JoinColumn({ name: 'userId' })`, cascade delete. This appears to mean creator/current user.
-- `parent`: `ManyToOne(User)` with `@JoinColumn({ name: 'parentId' })`, cascade delete. This is the business owner for parent flows.
-- `profile`: `OneToOne(ChildProfile)`.
-- `privateAttempts`: `OneToMany(ChildPrivateAttempt)`.
+- Purpose: child profile target for tests/evaluations.
+- Columns: `name`, `birthDate`, `gender`, `classId`, `createdById`, timestamps.
+- `classId` column is declared `@Column({ type: 'uuid' }) classId: string | null`, while relation is nullable. The column itself lacks `nullable: true`, conflicting with private children that use `classId = null`.
+- `ManyToOne class` joined by `classId`, nullable, `onDelete: CASCADE`. Private children are represented by no class.
+- `ManyToOne createdBy` joined by `createdById`, `onDelete: CASCADE`.
+- `ManyToOne parent` joined by `parentId`, `onDelete: CASCADE`; there is no scalar `parentId` property even though many queries rely on generated DB column.
+- `OneToOne profile`.
+- `OneToMany slots` to `EvaluationSlot`.
+- Critical mismatch: services frequently write/read `organization` and `user` on `Child`, but the entity does not define those relations.
 
-`src/children/entities/child-profile.entity.ts` (`children_profiles`):
+[src/children/entities/child-profile.entity.ts](src/children/entities/child-profile.entity.ts)
 
-- Optional diagnosis/notes/status extension. `OneToOne(Child)` with implicit join column; no cascade delete configured.
+- Optional one-to-one extension with diagnoses, notes, status. It owns the join column to child.
 
-`src/children/entities/child-private-attempt.entity.ts` (`child_private_attempts`):
+[src/children/entities/child-report.entity.ts](src/children/entities/child-report.entity.ts)
 
-- Purpose: entitlement/slot ledger for private child evaluation attempts.
-- Indexed by `childId`, `parentId`, status.
-- `kind`: `MAIN`, `RETAKE`, `EXTRA`.
-- `status`: `PENDING`, `COMPLETED`, `RETAKE`, `EXTRA_REQUESTED`, `PENDING_PAYMENT`.
-- `isPaid`, `requiresApproval`, nullable `evaluationAttemptId`, nullable `paymentId`.
-- `ManyToOne(Child)` and `ManyToOne(User parent)`, both cascade delete.
-- Important: this is not the same as `EvaluationAttempt`; it authorizes creation of one.
+- Legacy/simple report tied to `TestAssignment`, with `scoreJson`.
 
-`src/children/entities/child-report.entity.ts` (`children-reports`):
+## Evaluation System
 
-- Legacy report tied to `TestAssignment`; stores JSON as text.
-
-### Evaluations
-
-`src/evaluations/entities/evaluation.entity.ts` (`evaluations`):
+[src/evaluations/entities/evaluation.entity.ts](src/evaluations/entities/evaluation.entity.ts)
 
 - Purpose: evaluation definition/template.
-- Fields: `type`, nullable `ageFrom`/`ageTo`, `evaluatorTypes` text array, `title`, `institutionId`.
-- `institutionId` is a UUID scalar with no relation to `Organization`, but business logic treats it as organization id for institutional evaluations.
-- `questions`, `dimensions` cascade on save; `attempts` no cascade.
+- Columns: `type`, nullable `ageFrom`/`ageTo`, `evaluatorTypes`, `title`, `institutionId`.
+- `institutionId` is a raw UUID, not a TypeORM relation to `Organization`.
+- Cascading one-to-many definitions: `questions`, `dimensions`.
 
-`EvaluationDimension` (`evaluation_dimensions`):
+[src/evaluations/entities/evaluation-dimension.entity.ts](src/evaluations/entities/evaluation-dimension.entity.ts)
 
-- Belongs to one evaluation via explicit `evaluation_id`.
+- Purpose: scoring dimension under an evaluation.
 - Unique `(evaluationId, code)`.
-- Stores `minScore`, `maxScore`, optional `interpretationRules` JSONB.
-- Has questions with cascade.
+- Joined by `evaluation_id`, `onDelete: CASCADE`.
+- Contains score bounds and JSONB `interpretationRules`.
 
-`EvaluationQuestion` (`evaluation_questions`):
+[src/evaluations/entities/evaluation-question.entity.ts](src/evaluations/entities/evaluation-question.entity.ts)
 
-- Belongs to evaluation and dimension via `evaluationId`, `evaluationDimensionId`.
-- Has ordered answer options cascade.
+- Purpose: question under evaluation and dimension.
+- Has scalar `evaluationId` and `evaluationDimensionId`.
+- `ManyToOne evaluation` and dimension, both cascade delete.
+- Cascades child `answers`.
 
-`EvaluationQuestionAnswer` (`evaluation_question_answers`):
+[src/evaluations/entities/evaluation-question-answer.entity.ts](src/evaluations/entities/evaluation-question-answer.entity.ts)
 
-- Answer option with `text`, `scoreValue`, optional `code`, `order`.
-- Belongs to question and cascades on question delete.
+- Purpose: answer option with hidden `scoreValue`.
+- Joined to question by `questionId`, cascade delete.
+- Optional `code`, ordered by `order`.
 
-`EvaluationAttempt` (`evaluation_attempts`):
+[src/evaluations/entities/evaluation-attempt.entity.ts](src/evaluations/entities/evaluation-attempt.entity.ts)
 
-- Concrete parent-child-evaluation run.
+- Purpose: a parent-child execution of one evaluation.
 - Unique `(evaluationId, parentId, childId, attemptNumber)`.
 - Indexed lookup `(evaluationId, parentId, childId)`.
-- `attemptNumber` is sequential (`count + 1`), not limited by DB except business logic.
-- `status`: `in_progress`, `submitted`, `approved`.
-- Nullable `score`, `expiresAt`, `submittedAt`, JSONB `result`.
-- Answers cascade; one optional approval.
+- Status enum: `in_progress`, `submitted`, `approved`.
+- `attemptNumber` is sequential per evaluation-parent-child.
+- `expiresAt` allows time-limited attempts; expiration is checked lazily on read/save, not by cron.
+- `score` stores total numeric score when applicable.
+- `result` stores the full scoring output JSONB.
+- `answers` cascades on attempt save/delete.
+- `approval` one-to-one optional.
 
-`EvaluationAnswer` (`evaluation_answers`):
+[src/evaluations/entities/evaluation-answer.entity.ts](src/evaluations/entities/evaluation-answer.entity.ts)
 
-- One selected answer per attempt/question, enforced by unique `(attemptId, questionId)`.
-- Stores denormalized `evaluationDimensionId` and `scoreValue` at save time. This protects attempt scoring from future answer edits but duplicates state.
+- Purpose: selected answer per question for an attempt.
+- Unique `(attemptId, questionId)`, which powers progress upsert.
+- Stores denormalized `scoreValue` and `evaluationDimensionId` from the selected answer/question at save time.
+- All foreign relations cascade delete.
 
-`EvaluationApproval` (`evaluation_approvals`):
+[src/evaluations/entities/evaluation-approval.entity.ts](src/evaluations/entities/evaluation-approval.entity.ts)
 
-- One-to-one approval row per attempt, unique `attemptId`.
-- Fields `approvedBy`, `approvedAt`.
+- Purpose: one admin approval record per attempt.
+- Unique `attemptId`; stores raw `approvedBy` UUID and `approvedAt`.
 
-### Payments and notifications
+[src/evaluations/entities/evaluation-slot.entity.ts](src/evaluations/entities/evaluation-slot.entity.ts)
 
-`src/payments/entities/payment.entity.ts` (`payments`):
+- Purpose: entitlement ledger for private-child attempts.
+- Table name is `evaluation_slot`.
+- Slots have `childId`, `parentId`, `kind` (`MAIN`, `RETAKE`, `EXTRA`), `status`, deprecated `isPaid`, `requiresApproval`, nullable `evaluationAttemptId`, nullable `paymentId`.
+- Status machine in `transitionTo()`:
 
-- Payment row for user/child/private attempt.
-- Fields include `userId`, nullable `childId`, nullable `privateAttemptId`, `paymentUrl`, numeric string `amount`, `currency`, `status`, `provider`, nullable `providerPaymentId`, JSONB `metadata`, retry counters, `expiresAt`.
-- Indexed pending expiry and provider id.
-- `ManyToOne(User)` cascade delete.
-
-`PaymentWebhookDedup` (`payment_webhook_dedup`):
-
-- Idempotency table unique `(providerPaymentId, payloadHash)`.
-- Note: same provider event with changed payload hash is accepted again; terminal status guards prevent many repeats.
-
-`Notification` (`notifications`):
-
-- In-app notification for a user.
-- `ManyToOne(User)` cascade delete, explicit `userId`.
-- Has `title`, `message`, `isRead`, `type`, nullable JSONB `metadata`.
-
-### Deals and tests
-
-`Activity` (`activities`): activity/service category. Cannot be deleted if deals exist.
-
-`Deal` (`deals`): organization-created opportunity with `activity`, `organization`, `creator`, `studentsCount`, `status`, `deadline`, proposals. Activity and creator deletion is restricted; organization cascade deletes deals.
-
-`Proposal` (`proposals`): enricher bid for a deal. Unique `(deal, provider)`, price stored as numeric string, status defaults `PENDING`.
-
-Legacy tests:
-
-- `Test` -> `Question` -> `Answer`
-- `TestAssignment` links child/test with due date/status.
-- `TestResult` stores score and submitted answers JSON.
-- This system is separate from `EvaluationsModule` and appears older/less complete.
-
-## 4. Business Workflows
-
-### Authentication
-
-1. Public `POST /api/auth/login` validates phone/password with `AuthProvider.validateUser()`.
-2. `AuthProvider.login()` signs access token for 30 days and refresh token for 60 days, stores hashed refresh token in `sessions`, and returns user identity/roles.
-3. Public `POST /api/auth/refresh` verifies token, finds a valid session by user id, compares supplied token with stored hash, deletes the old session, and issues a fresh login.
-4. `DELETE /api/auth/logout/:sessionId` deletes a session; `DELETE /api/auth/logout-all` deletes all sessions for authenticated user.
-5. Email verification is intended through `GET /api/auth/verify-email?token=...`.
-
-Risk: `AuthProvider.generateVerificationToken()` signs `{ sub: userId, type: 'email_verification' }`, but `verifyEmail()` reads `payload.userId`; verification will not find the user. `MailerService` signs `{ userId }` but does not include `type`, so that token also fails `AuthProvider.verifyEmail()`.
-
-### Signup
-
-Organization owner:
-
-1. Public `POST /api/auth/beneficiaries-signup`.
-2. DTO is `BeneficiariesSignupDto`, effectively `OrganizationSignupDto`.
-3. Transaction creates `User` with `ORGANIZATIONOWNER`.
-4. `OrganizationSignupStrategy` creates `Organization` owned by user.
-5. Queues welcome notification and verification email.
-
-Enricher:
-
-1. Public `POST /api/auth/enrichers-signup`.
-2. Creates `User` with `ENRICHER`.
-3. Creates `Enricher` profile with organization name and pending approval.
-4. Queues welcome and verification email.
-
-### Parent and child flows
-
-Institutional child creation (`ChildrenService.create()`):
-
-1. Roles allowed at controller: organization owner, parent, teacher.
-2. If both `organizationId` and `classId` are provided, validates organization exists and class belongs to organization.
-3. Verifies current user exists.
-4. Parent input may create a new user or update/add `PARENT` role to an existing user.
-5. Creates `Child` with optional organization/class, `user` as current user, `parent` as parent account.
-
-Private parent child creation (`ParentChildrenController`):
-
-1. Parent calls `POST /api/parent/children`.
-2. Service validates caller has `PARENT`.
-3. Counts private children (`parent = current user`, `organization IS NULL`).
-4. Enforces max 2 private children.
-5. Creates child with `organization = null`, `user = parent`, `parent = parent`, counters reset.
-
-Organization child listing:
-
-- `/api/children/organization/:orgId` validates `OrganizationsService.isOrgMember()`, then returns lightweight cards with class/grade and derived evaluation status from `attemptsUsed`.
-- Bug: org membership check for teachers likely fails because it compares teacher profile id to user id.
-
-### Evaluation flows
-
-Evaluation definition:
-
-1. Admin creates evaluation through `POST /api/evaluations`.
-2. `EvaluationsService.createEvaluation()` saves evaluation, dimensions, questions, and scored answer options in one transaction.
-3. Duplicate dimension codes are rejected in service and also by DB unique constraint.
-4. Form endpoint strips `scoreValue`, `minScore`, `maxScore`, interpretation rules.
-
-Available evaluations:
-
-1. Parent calls `/api/evaluations/available/:childId`.
-2. Child must belong to parent.
-3. Age is computed from `birthDate`.
-4. Evaluation age bounds are applied.
-5. If child is institutional, `evaluation.institutionId` must match `child.organization.id`.
-6. For private children, no institution filter is applied, so all age-compatible evaluations are returned. This is intentional only if private evaluations are global; otherwise it is a missing scope rule.
-
-Attempt lifecycle:
-
-```text
-start -> IN_PROGRESS
-save progress -> IN_PROGRESS
-submit or auto-submit -> SUBMITTED
-admin approve -> APPROVED
+```mermaid
+stateDiagram-v2
+  READY --> CONSUMED
+  REQUESTED --> AWAITING_PAYMENT
+  REQUESTED --> READY
+  AWAITING_PAYMENT --> READY
+  CONSUMED --> COMPLETED
 ```
 
-Only parents start/save/submit. Admin approves. Owner/teacher/employee can fetch only approved attempts through `getAttempt()`, but organization/class scoping is marked TODO.
+- Note: TypeScript numeric enum values are used for `SlotKind` (`MAIN=0`, `RETAKE=1`, `EXTRA=2`) because the enum has no string values.
 
-### Private attempt/retake/payment flow
+## Payments
+
+[src/payments/entities/payment.entity.ts](src/payments/entities/payment.entity.ts)
+
+- Purpose: local payment ledger.
+- `userId` required; `childId` and `privateAttemptId` nullable.
+- Amount is numeric(12,2) string in SAR major units.
+- Provider enum currently supports Moyasar/Paytabs/Hyperpay, but `PaymentsService.resolveProvider()` only allows the active provider implementation.
+- Indexed pending expiry `(status, expiresAt)`.
+- Metadata JSON stores business refs like `childId`, `attemptRequestId`, `privateAttemptId`.
+
+[src/payments/entities/payment-webhook-dedup.entity.ts](src/payments/entities/payment-webhook-dedup.entity.ts)
+
+- Purpose: webhook idempotency by `(providerPaymentId, payloadHash)`.
+- This dedupes identical payloads, but different payloads for the same provider payment are processed separately.
+
+## Notifications
+
+[src/notifications/entities/notification.entity.ts](src/notifications/entities/notification.entity.ts)
+
+- Purpose: persisted in-app notification.
+- `ManyToOne user`, `onDelete: CASCADE`, explicit `userId`.
+- Indexed by `user` and `createdAt`.
+- Supports `type`, `metadata`, `isRead`.
+
+## Deals
+
+[src/deals/entities/activity.entity.ts](src/deals/entities/activity.entity.ts): reusable activity category with deals.
+
+[src/deals/entities/deal.entity.ts](src/deals/entities/deal.entity.ts)
+
+- Purpose: organization request for provider proposals.
+- `ManyToOne activity` with `onDelete: RESTRICT`.
+- `ManyToOne organization` cascade delete.
+- `ManyToOne creator` with `onDelete: RESTRICT`.
+- `studentsCount`, `status` (`OPEN`/`CLOSED`), `deadline`.
+- Indexed by organization/status and deadline.
+
+[src/deals/entities/proposal.entity.ts](src/deals/entities/proposal.entity.ts)
+
+- Purpose: provider bid for a deal.
+- Unique `(deal, provider)`.
+- `price` numeric string, status `PENDING`/`ACCEPTED`/`REJECTED`.
+
+## Legacy Tests
+
+The `tests` module is separate from `evaluations`.
+
+- `Test`: title, description, `questionNo`, questions.
+- `Question`: belongs to `Test`, cascades answers.
+- `Answer`: answer text and float `score`.
+- `TestAssignment`: child/test/dueDate/status.
+- `TestResult`: assignment/score/answersJson.
+
+This subsystem has no approval, attempt, expiration, or notification pipeline.
+
+Implementation bug: [src/tests/tests.service.ts](src/tests/tests.service.ts) imports `Test` from `@nestjs/testing` instead of [src/tests/entities/test.entity.ts](src/tests/entities/test.entity.ts). The controller also parses UUID params and then passes `+id` to update/remove stubs, producing `NaN`.
+
+## Sessions
+
+[src/session/entities/session.entity.ts](src/session/entities/session.entity.ts)
+
+- Stores hashed refresh token, userId, device, ip, expiresAt, createdAt.
+- There is no TypeORM relation to `User`.
+- `findValidSession()` only queries by `userId`, does not check `expiresAt`, and does not select a specific session if multiple exist.
+
+# 4. Business Workflows
+
+## Authentication
+
+1. Public signup endpoints in [src/users/controllers/auth.controller.ts](src/users/controllers/auth.controller.ts):
+   - `POST /auth/beneficiaries-signup`: currently supports `AccountType.ORGANIZATION`.
+   - `POST /auth/enrichers-signup`: creates user plus `Enricher`.
+2. `AuthProvider.isAlreadyExits()` checks phone OR email.
+3. `UsersService.create()` hashes password and attaches roles.
+4. Organization signup delegates extra data to `SignupStrategyFactory`, currently only `OrganizationSignupStrategy`.
+5. Signup queues welcome and verification email notifications.
+6. `POST /auth/login` validates phone/password and calls `AuthProvider.login()`.
+7. Login signs:
+   - access token: 30d
+   - refresh token: 60d
+   - session row: `expiresAt = now + 7 days`
+8. `POST /auth/refresh` verifies token, loads a session by user, bcrypt-compares the supplied token to session hash, deletes the session, then creates fresh tokens.
+9. `GET /auth/verify-email` calls `AuthProvider.verifyEmail()`.
+
+Uncertainty/bug: `AuthProvider.generateVerificationToken()` signs `{ sub: userId, type: 'email_verification' }`, but `verifyEmail()` reads `payload.userId`, not `payload.sub`. `MailerService` signs `{ userId }`; `EmailProvider` uses `AuthProvider`, so the current queued verification path likely cannot verify correctly.
+
+## Parent and Child Flows
+
+Private child creation:
+
+1. `POST /parent/children` requires `PARENT`.
+2. [src/children/children.service.ts](src/children/children.service.ts) checks the user has parent role.
+3. Counts private children where `parent.id = parentId` and `classId IS NULL`.
+4. Limit is 2 private children; exceeding the limit queues an in-app notification and throws.
+5. Saves child with `classId = null`.
+
+Institutional child creation:
+
+1. `POST /children` allows organization owner, parent, teacher.
+2. DTO contains `child` and `parent` objects.
+3. If `organizationId` and `classId` are provided, organization is loaded and class is checked with `ClassesService.isOrgCls()`.
+4. Parent is either found by phone/email or created.
+5. If existing user lacks parent role, `UsersService.addRolesToUser()` adds it.
+6. Existing parent account can be updated with supplied name/email/phone/password.
+7. Child is saved with creator, parent, class, and attempted `organization` assignment.
+
+Important break: `Child` does not define `organization` or `user`, so the institutional child flow is partially inconsistent with the entity model.
+
+## Evaluation Flows
+
+Admin creates evaluation:
+
+1. `POST /evaluations` requires `ADMIN`.
+2. `EvaluationsService.createEvaluation()` validates duplicate dimension codes.
+3. Saves evaluation, dimensions, questions, and answers in one transaction.
+4. Answers include hidden `scoreValue`; form endpoint does not expose it.
+
+Parent finds available evaluations:
+
+1. `GET /evaluations/available/:childId` currently has `@Roles(UserRole.PARENT)` commented out, but global JWT still applies.
+2. Service requires parent role internally.
+3. Child must belong to parent.
+4. Age is calculated from `birthDate`.
+5. Evaluation is filtered by `ageFrom/ageTo`.
+6. For institutional child, query attempts to scope by `child.class.organization.id`, but child is loaded with `class: true` only, not `class.organization`; this is fragile.
+
+Start attempt:
+
+1. `POST /evaluations/:id/start` requires parent.
+2. Evaluation exists.
+3. Child belongs to parent.
+4. For institutional children, evaluation must belong to child institution.
+5. Age constraints are enforced.
+6. Transaction locks existing attempts for `(evaluationId,parentId,childId)`.
+7. No concurrent in-progress attempt is allowed.
+8. Retake after an approved attempt is denied and emits `evaluation.limit_reached`.
+9. Institutional children are limited to 2 attempts.
+10. Private children must have a ready `EvaluationSlot`.
+11. New `EvaluationAttempt` is created with `attemptNumber = count + 1`.
+12. Private slot is linked to attempt.
+
+Save progress:
+
+1. `PATCH /attempts/:id/save` requires parent.
+2. Attempt ownership is checked.
+3. `maybeAutoSubmitIfExpired()` can submit the attempt before saving if expired.
+4. If still `in_progress`, answers are converted to rows and upserted on `(attemptId, questionId)`.
+5. Duplicate question IDs are rejected; question/evaluation ownership and answer/question ownership are validated.
+
+Submit attempt:
+
+1. `POST /attempts/:id/submit` requires parent.
+2. Attempt is pessimistically locked.
+3. Must be owned by parent and `in_progress`.
+4. DTO answers are upserted.
+5. All saved answers are loaded.
+6. Evaluation dimensions are loaded.
+7. `EvaluationScoringService.calculate()` computes result.
+8. Attempt becomes `submitted`; `submittedAt`, `score`, and JSON `result` are stored.
+9. If child appears private, slot is marked completed.
+10. Emits `evaluation.submitted`.
+
+Approval:
+
+1. `POST /attempts/:id/approve` requires admin.
+2. Attempt is locked.
+3. Only `submitted` attempts can be approved.
+4. Existing approval is checked.
+5. Creates `EvaluationApproval`, marks attempt `approved`, emits `evaluation.approved`.
+
+## Private Retry/Retake/Paid Extra Flow
+
+Private attempts are governed by `EvaluationSlot` rows in [src/children/private-child-attempts.service.ts](src/children/private-child-attempts.service.ts).
 
 Main slot:
 
-1. Parent creates private child.
-2. Parent calls `POST /api/attempts/:childId/start`, which creates/reuses a `ChildPrivateAttempt` kind `MAIN`, status `PENDING`, if `child.attemptsUsed === 0`.
-3. Parent starts an evaluation; `EvaluationsService.startEvaluation()` consumes matching entitlement and links it to `EvaluationAttempt`.
+1. `POST /attempts/:childId/start` opens a main free slot, not an evaluation attempt.
+2. Usage checks completed attempts; if any completed attempt exists, main slot cannot be opened.
+3. Existing unconsumed main slot is reused.
+4. New slot: `kind=MAIN`, `status=READY`, no payment/approval.
 
 Retake:
 
-1. Parent calls `POST /api/attempts/:childId/retake`.
-2. Child must have at least one completed attempt and `retakeUsed === false`.
-3. Creates/reuses `ChildPrivateAttempt` kind `RETAKE`, status `RETAKE`.
-4. Starting the next evaluation consumes the retake entitlement.
-5. On submission, `markPrivateAttemptCompleted()` sets `attemptsUsed = 2` and `retakeUsed = true`.
+1. `POST /attempts/:childId/retake`.
+2. Child must be private and owned by parent.
+3. At least one completed attempt required.
+4. If a retake already completed/used, reject.
+5. Creates `kind=RETAKE`, `status=READY`.
 
 Extra paid attempt:
 
-1. Parent calls `POST /api/attempts/:childId/request-extra`.
-2. Requires `attemptsUsed >= 2` and `retakeUsed === true`.
-3. Creates `ChildPrivateAttempt` kind `EXTRA`, status `EXTRA_REQUESTED`, `requiresApproval = true`.
-4. Admin calls `POST /api/admin/attempts/:id/approve`.
-5. Service changes status to `PENDING_PAYMENT`, creates payment checkout, stores `paymentId`, notifies parent.
-6. Parent can refresh/retry checkout through `POST /api/payments/:attemptId/initiate`.
-7. Webhook success emits `payment.success`; listener changes private attempt to `PENDING`, `isPaid = true`.
-8. Starting evaluation attempt number 3+ consumes `EXTRA` entitlement where `status = PENDING` and `isPaid = true`.
+1. `POST /attempts/:childId/request-extra`.
+2. Requires two completed attempts and `hasRetake`.
+3. Creates `kind=EXTRA`, `status=REQUESTED`, `requiresApproval=true`.
+4. Admin approves with `POST /admin/attempts/:id/approve`.
+5. Slot transitions `REQUESTED -> AWAITING_PAYMENT`.
+6. Payment is created and linked to `paymentId`.
+7. Parent completes payment.
+8. `payment.success` listener transitions `AWAITING_PAYMENT -> READY`.
+9. Parent can then start an evaluation attempt using that ready slot.
 
-### Payments
+## Payment Flow
 
-Generic payment creation:
+1. `POST /payments` requires parent and creates a generic SAR checkout for a child owned by that parent.
+2. `PaymentsService.createPayment()` rejects non-SAR currency, verifies child ownership by raw SQL query, saves local `Payment(PENDING)`.
+3. `MoyasarProvider.createPayment()` creates a Moyasar invoice, or returns a mock URL when `MOYASAR_SECRET_KEY` is missing.
+4. Local payment is updated with `providerPaymentId` and `paymentUrl`.
+5. `POST /payments/webhook` is public but requires raw body and `x-moyasar-signature`.
+6. Signature is HMAC-SHA256 over raw body using `MOYASAR_WEBHOOK_SECRET`.
+7. Webhook payload is deduped by provider payment id + payload hash.
+8. Bull job `PROCESS_PAYMENT_WEBHOOK` verifies payment status with provider.
+9. If provider says paid/failed, local payment is pessimistically locked and terminal status is written.
+10. Success/failure handler jobs emit `payment.success` or `payment.failed`.
+11. `PaymentsCronService.expireStalePayments()` expires pending payments every 5 minutes.
+12. `PaymentsCronService.autoRetryFailedPayments()` retries failed payments every 15 minutes unless disabled.
 
-1. Parent calls `POST /api/payments`.
-2. Currency must be `SAR`.
-3. Active provider must match `MoyasarProvider`.
-4. Raw SQL checks child belongs to parent using `"c.parentId"` column.
-5. Creates local pending payment, then provider invoice/checkout.
-6. If provider creation fails, local payment becomes `FAILED`.
+## Notifications
 
-Webhook:
+1. Code calls `NotificationsService.enqueue()` or `dispatch()`.
+2. Email address is resolved from user when needed.
+3. Bull `notifications` queue receives `send` jobs.
+4. `NotificationProcessor` routes delivery:
+   - `email`: Resend email only.
+   - `inapp`: persist `Notification`.
+   - `both`: both email and in-app.
+   - `verify_email`: call `EmailProvider.sendVerificationEmail()`.
+5. Users list/read notifications through [src/notifications/notifications.controller.ts](src/notifications/notifications.controller.ts).
 
-1. Public `POST /api/payments/webhook` requires raw body and `x-moyasar-signature`.
-2. `MoyasarProvider.verifyWebhookSignature()` HMAC-validates raw body.
-3. Payload is parsed, provider payment id extracted, payload hash saved in `payment_webhook_dedup`.
-4. Bull job `PROCESS_PAYMENT_WEBHOOK` verifies payment status with provider.
-5. Pending local row is locked pessimistically and moved to `PAID` or `FAILED`.
-6. Follow-up jobs emit `payment.success` or `payment.failed`.
+## Organization Management
 
-Cron:
+- Organization is created only as signup extra data, not through `OrganizationsController`.
+- `OrganizationsService.findByOwner()` is the primary owner-to-org resolver.
+- `OrganizationsService.isOrgMember()` checks owner or teacher membership, but compares `teacher.id === userId`; `Teacher.id` is not `User.id`, so teacher membership is likely wrong.
+- Organization approval status exists but is not enforced by guards or services.
 
-- Every 5 minutes: expire stale pending payments.
-- Every 15 minutes: optionally auto-retry failed payments unless `PAYMENT_AUTO_RETRY_ENABLED=false`.
+# 5. Evaluation System Deep Dive
 
-### Notifications
+The evaluation system has two overlapping concepts:
 
-1. Services call `NotificationsService.enqueue()` or `dispatch()`.
-2. Payload is queued to Bull queue `notifications` as job `send`.
-3. `NotificationProcessor` sends email, verification email, in-app notification, or both.
-4. In-app notifications can be listed, counted, and marked read.
+- `EvaluationAttempt`: actual attempt for a particular evaluation/parent/child.
+- `EvaluationSlot`: entitlement for private children to start an attempt.
 
-### Organization management
+Institutional children do not need slots and are limited by attempt count. Private children must consume slots, enabling paid extra attempts.
 
-- Organization creation only exists through signup.
-- `OrganizationsController.findOne()` and `remove()` still coerce UUIDs to numbers and call stub service methods. These routes are broken.
-- Organization owner lookup `findByOwner()` is used by class/teacher/deal flows.
-- `isOrgMember()` is central but currently flawed for teachers.
+Attempt state machine:
 
-### Deals
-
-1. Admin creates activities.
-2. Organization owner or teacher creates a deal for an activity with future deadline.
-3. `DealsService.resolveOrganizationId()` maps owner by owned organization or teacher by teacher profile. Although controller permits `EMPLOYEE`, service does not implement employee resolution, so employees are rejected.
-4. New deal notifies all users with `ENRICHER`.
-5. Enricher submits one proposal per deal before deadline.
-6. Enricher can update own proposal before deadline.
-7. Proposal acceptance/closing is not implemented.
-
-## 5. Evaluation System Deep Dive
-
-Evaluation definition is template data. `EvaluationAttempt` is the runtime state. `ChildPrivateAttempt` is a separate entitlement ledger only for private children.
-
-State machine:
-
-```text
-EvaluationAttempt
-  IN_PROGRESS --submit/auto-submit--> SUBMITTED --admin approve--> APPROVED
-
-ChildPrivateAttempt
-  MAIN:   PENDING -> linked -> COMPLETED
-  RETAKE: RETAKE  -> linked -> COMPLETED
-  EXTRA:  EXTRA_REQUESTED -> PENDING_PAYMENT -> PENDING -> linked -> COMPLETED
+```mermaid
+stateDiagram-v2
+  [*] --> in_progress: startEvaluation
+  in_progress --> submitted: submitAttempt
+  in_progress --> submitted: lazy auto-submit on expiry
+  submitted --> approved: admin approveAttempt
+  approved --> [*]
 ```
 
 Attempt numbering:
 
-- In `startEvaluation()`, attempts are loaded for `(evaluationId, parentId, childId)` ordered by `attemptNumber DESC`.
-- `attemptNumber = attempts.length + 1`.
-- DB uniqueness prevents duplicate same-number rows, but no retry logic catches unique violations.
-- Institutional children: max 2 attempts. Retake is blocked after any last approved attempt.
-- Private children: attempt count is controlled by available entitlements. This allows paid attempts beyond 2 if entitlements exist.
+- In `EvaluationsService.startEvaluation()`, attempt count is all existing attempts for the same `(evaluationId,parentId,childId)`.
+- New `attemptNumber = count + 1`.
+- DB unique constraint prevents duplicate attempt numbers.
+- For private children, `AttemptUsageService.getUsage()` counts completed attempts across all evaluations for `(childId,parentId)`, not by `evaluationId`. This means private retake/extra entitlement logic is child-global, while `EvaluationAttempt` uniqueness is evaluation-specific.
 
 Scoring:
 
-- `buildAnswerRows()` validates one answer per question, question belongs to evaluation, selected answer belongs to question.
-- `EvaluationAnswer.scoreValue` and `evaluationDimensionId` are copied from the selected answer/question.
-- `EvaluationScoringService.calculate()` dispatches by `EvaluationType`.
-- Default/multiple intelligences/Torrance: sums by dimensions, calculates dimension and total percentage, returns top 3 dominant dimensions.
-- Pride: uses total score thresholds for Arabic low/medium/high labels.
-- Renzulli: computes per-dimension and total averages, maps average to low/medium/high.
-- Holland: marks dimensions suitable if score >= 21, total suitable if total >= 126, builds three-letter code from top dimensions.
-- Learning styles: uses absolute score strength and JSON `positivePole`/`negativePole`, no total score.
+- `EvaluationAnswer.scoreValue` is copied from selected answer at save/submit time.
+- `EvaluationScoringService.calculate()` branches by `EvaluationType`.
+- Default/dimensional scoring sums answers per dimension, computes total, min/max, percentages, levels from dimension `interpretationRules`, and top 3 dominant dimensions.
+- `PRIDE`: adds hard-coded Arabic low/medium/high interpretation based on total score ranges.
+- `RENZULLI`: computes per-dimension averages and total average, then levels by 1-4 scale.
+- `HOLLAND`: marks dimensions suitable at score >= 21, builds top-three Holland code.
+- `LEARNING_STYLES`: does not use total score; uses signed dimension score, poles from `interpretationRules`, and strength by absolute score.
+- `TORRANCE`: currently uses default dimension scoring.
 
-Approval:
+Expiration behavior:
 
-- Only `ADMIN` can approve.
-- Only `SUBMITTED` can be approved.
-- Transaction locks attempt and approval row, creates `EvaluationApproval`, sets attempt status `APPROVED`, emits `evaluation.approved`.
-- Owner reports use only approved attempts for score statistics.
+- `StartEvaluationDto` can specify either `expiresAt` or `expiresInSeconds`.
+- Expiration is lazy. It is checked in `saveProgress()` and parent `getAttempt()`, not by scheduled job.
+- Expired in-progress attempts are auto-submitted with whatever answers already exist; empty answer sets can produce zero/empty results.
+- `submitAttempt()` calculates `expired` but does not reject expired submission. It emits `autoSubmitted: expired`, so a manual submit after expiry can be labeled auto-submitted.
 
-Expiration and auto-submit:
+Locking and concurrency:
 
-- Attempt expiry is optional and can be absolute `expiresAt` or relative `expiresInSeconds`.
-- `maybeAutoSubmitIfExpired()` is called from `saveProgress()` and parent `getAttempt()`.
-- There is no scheduler to auto-submit expired attempts globally; auto-submit happens lazily when the parent touches the attempt.
-- Auto-submit scores whatever answers have been saved, even zero answers.
+- `startEvaluation()` uses a transaction and `pessimistic_write` lock when reading existing attempts.
+- `submitAttempt()` locks the attempt row.
+- `approveAttempt()` locks attempt and approval lookup.
+- `maybeAutoSubmitIfExpired()` locks attempt before writing submission.
+- `EvaluationAnswer` has unique `(attemptId, questionId)` and progress uses upsert.
+- Private slot lookup uses pessimistic locks in `findEntitlementForNext()`.
 
-Locking/concurrency:
+Concurrency risks:
 
-- Submission and approval use pessimistic write locks on the attempt row.
-- Auto-submit also locks attempt row.
-- Private entitlement lookup/link/completion uses pessimistic locks.
-- Payment webhook status update locks payment row.
-- Gaps: `startEvaluation()` uses `repo.find(... lock: pessimistic_write)` without an explicit query runner outside a transaction manager; it is inside a transaction, but TypeORM `find` locking semantics are database-dependent. Concurrent starts may still hit the unique constraint rather than produce a clean business error.
+- Some private slot methods use `this.privateAttempts.findOne()` inside a transaction instead of the transaction manager repository, so the lock may not participate in the active transaction.
+- `EvaluationSlot.linkEvaluationToEntitlement()` sets `evaluationAttemptId` without calling `transitionTo(CONSUMED)`, so the slot status may remain `READY` after starting via the main `EvaluationsService` path. `EvaluationAttemptService.startAttempt()` does transition, but that service is not registered in `EvaluationsModule`.
+- No uniqueness prevents multiple READY private slots of the same kind for a child/parent.
 
-Private vs institutional flows:
+Private vs institutional:
 
-- Institutional children must use evaluations belonging to their organization and are capped at 2 attempts.
-- Private children must first create entitlement rows. Main and retake are free; extra requires approval/payment.
-- Submission of private attempts updates child-level counters (`attemptsUsed`, `retakeUsed`) and entitlement status. Institutional submissions do not update these counters, so using `attemptsUsed` as general evaluation status is inaccurate for institutional children.
+- The intended private-child signal is `child.class == null` / `classId IS NULL`.
+- Some evaluation code instead checks `child.organization == null`, but `Child.organization` does not exist.
+- Institutional flow expects evaluation `institutionId` to match child organization, but organization is indirectly derivable from `child.class.organization`. That relation is not consistently loaded.
 
-## 6. Authorization Model
+# 6. Authorization Model
 
 Global guards:
 
-- All routes require JWT unless marked `@Public`.
-- `@Roles(...)` metadata is enforced by `RolesGuard`.
-- Roles are stored as entities in JWT payload. `RolesGuard` expects `request.user.roles` to be an array of objects with `.name`.
+- `JwtAuthGuard` applies to all routes unless decorated with `@Public()`.
+- `RolesGuard` applies after JWT and checks handler-level roles metadata.
+- `RolesGuard` reads only handler metadata, not class-level metadata.
+- `OwnershipGuard` exists but is not registered globally and does not appear to be used.
 
-Roles:
+Role rules observed:
 
-- `ADMIN`
-- `ORGANIZATIONOWNER`
-- `EMPLOYEE`
-- `ENRICHER`
-- `TEACHER`
-- `PARENT`
+- `ADMIN`: seed roles, create/list evaluation definitions, list/approve attempts, create tests, manage activities, admin private extra approval.
+- `ORGANIZATIONOWNER`: create teachers/classes/grades, access owner reports, create deals.
+- `TEACHER`: can create institutional children and access some organization class/grade child views; can create deals in controller, but service role handling only supports owner/teacher.
+- `PARENT`: create/list private children, start/save/submit attempts, create/retry payments.
+- `ENRICHER`: signup as service provider, submit/update proposals.
 
-Ownership checks:
+Access restrictions:
 
-- Parent child ownership: usually `Child.parent.id === actor.userId`.
-- Private child ownership additionally requires `organization IS NULL`.
-- Attempt ownership: `EvaluationAttempt.parentId === actor.userId`.
-- Notification ownership: update queries include `userId`.
-- Payment ownership: `Payment.userId === current user` and child ownership checked during creation.
-- Proposal ownership: only proposal provider can update proposal.
+- Parent attempt access checks `attempt.parentId`.
+- Child private flows check child belongs to parent and `classId IS NULL`.
+- Payment retry checks `payment.userId`.
+- Notification read/update checks `userId`.
+- Owner reports resolve organization from the authenticated organization owner.
 
-Admin-only flows:
+Important authorization gaps:
 
-- Create/list detailed evaluations.
-- List/filter attempts.
-- Approve evaluation attempts.
-- Approve extra private attempt requests.
-- Seed roles, role-grouped users, create/update/delete tests and activities.
+- Several routes lack explicit `@Roles()` and are accessible to any authenticated user, for example `GET /users`, `GET /classes/organization/:orgId`, update/delete classes, update/delete children, test assignment/submit endpoints.
+- `OwnerEvaluationResultsController` allows `ADMIN`, but service `resolveOrganizationId()` rejects non-organization owners, so admin cannot use these endpoints.
+- Organization approval/enricher approval statuses are stored but not enforced.
+- Owner/teacher attempt access has a TODO and currently only requires attempt to be approved, without class/org scoping.
 
-Parent-only flows:
+# 7. Important Services
 
-- Private children.
-- Evaluation slots/retake/extra request.
-- Start/save/submit attempts.
-- Payment creation/retry.
+## EvaluationsService
 
-Known access risks:
+File: [src/evaluations/evaluations.service.ts](src/evaluations/evaluations.service.ts)
 
-- `UsersController.findAll()`, `findOne()`, `remove()` have no role restriction beyond JWT.
-- `ChildrenController.findByUser`, `findOne`, `update`, `remove` are authenticated but not owner/admin scoped.
-- `ClassesController` has several unscoped read/write routes.
-- `EvaluationsService.getAttempt()` explicitly has TODO for organization/class scoping for owner/teacher/employee.
-- `OwnershipGuard` exists but is not used.
+Responsibility: creates evaluation definitions, starts attempts, saves progress, submits/scored attempts, approves attempts, lists attempts.
 
-## 7. Important Services
+Dependencies: `DataSource`, `EventEmitter2`, `PrivateChildAttemptsService`, `EvaluationScoringService`, repositories for all evaluation entities and `Child`.
 
-`AuthProvider`:
+Coupling level: very high. It owns authoring, attempt lifecycle, scoring orchestration, private-slot integration, authorization checks, and event emission.
 
-- Responsibility: login, refresh token issuance through `SessionService`, signup orchestration, email verification token creation.
-- Dependencies: users, JWT, sessions, DataSource, signup factory, notifications.
-- Risks: verification token payload mismatch; signup only handles organization in `beneficiariesSignup`; notifications inside DB transaction can enqueue jobs before transaction commit.
-- Coupling: high.
-- Refactor: split `AuthService`, `SignupService`, `EmailVerificationService`; use outbox/after-commit notification dispatch.
+Risks:
 
-`UsersService`:
+- References missing child organization relation.
+- Private/institutional detection is inconsistent.
+- Expiration is lazy and mixed into read/save logic.
+- Slot transitions are split across services and not consistently applied.
 
-- Responsibility: user create/update/role mutation/lookup/role seeding.
-- Risks: `create()` uses injected `roleRepo` even inside a transaction manager, while saving user through manager. Role lookup should use the same manager.
-- Coupling: medium.
+Refactor direction: split into `EvaluationDefinitionService`, `AttemptLifecycleService`, `AttemptAnswerService`, `AttemptApprovalService`, `EvaluationAccessPolicy`, and `PrivateAttemptEntitlementService`.
 
-`ChildrenService`:
+## PrivateChildAttemptsService
 
-- Responsibility: child creation/listing/update and private child creation.
-- Risks: mixes institutional and private rules; updates existing parent user with supplied password during child creation; unscoped update/delete.
-- Coupling: high due to users/auth/classes/org/notifications.
+File: [src/children/private-child-attempts.service.ts](src/children/private-child-attempts.service.ts)
 
-`PrivateChildAttemptsService`:
+Responsibility: private child attempt entitlements: main slot, retake, extra approval/payment, payment-success unlock, slot completion.
 
-- Responsibility: private entitlement lifecycle, admin approval, payment unlock listener, child counter updates.
-- Risks: entitlement state and child counters are duplicated; partial failures around payment creation after state change can leave `PENDING_PAYMENT` without usable payment if provider fails.
-- Coupling: high with payments, children, notifications, evaluation service.
+Dependencies: `DataSource`, `Child` repo, `EvaluationSlot` repo, `PaymentsService`, `NotificationsService`, `AttemptUsageService`, `ChildrenService`, `ConfigService`.
 
-`EvaluationsService`:
+Coupling level: high. It crosses children, evaluations, payments, notifications, and config.
 
-- Responsibility: evaluation definitions, forms, available evaluation lookup, attempts, save/submit/approve, scoring, events.
-- Risks: large service with multiple policies; private/institutional logic intertwined; lazy expiration only; owner/teacher access TODO.
-- Coupling: very high.
-- Refactor: split into `EvaluationCatalogService`, `AttemptLifecycleService`, `AttemptSubmissionService`, `EvaluationAccessPolicy`, `PrivateAttemptPolicy`.
+Risks:
 
-`EvaluationScoringService`:
+- Circular module dependencies with `PaymentsModule` and `ChildrenModule`.
+- Some transaction code uses repository instances outside the transaction manager.
+- Slot states duplicate attempt state and payment state.
+- `assertCanStartAttempt()` exists but is not integrated into `EvaluationsService.startEvaluation()`.
 
-- Responsibility: deterministic scoring per evaluation type.
-- Risks: hard-coded thresholds and Arabic labels in code; result JSON shape differs by type; no versioning.
-- Coupling: low.
-- Refactor: externalize scoring policy/version per evaluation type.
+## PaymentsService
 
-`OwnerEvaluationResultsService`:
+File: [src/payments/payments.service.ts](src/payments/payments.service.ts)
 
-- Responsibility: organization owner filters, report cards, class summaries/status, reminders.
-- Risks: controller allows admin, but `resolveOrganizationId()` rejects non-owner in practice; relies on latest attempt ordering and approved-only stats.
-- Coupling: medium.
+Responsibility: payment lifecycle, provider calls, webhook validation/dedup/queueing, expiry, retry, payment events.
 
-`PaymentsService`:
+Dependencies: Bull queue, TypeORM, `PaymentProvider`, config, EventEmitter2.
 
-- Responsibility: create payment sessions, webhook verification/dedup, processing jobs, status transitions, retry/expiry.
-- Risks: idempotency by payload hash allows duplicate semantic events with changed payload; retry sets existing payment back to pending before provider call; no DB-level unique provider id.
-- Coupling: high to provider, Bull, events.
+Coupling level: medium-high but relatively well-bounded behind a provider interface.
 
-`NotificationsService`:
+Risks:
 
-- Responsibility: enqueue notifications, resolve email, list/read in-app notifications.
-- Risks: async queue means callers assume eventual delivery; controller has debug `console.log`.
-- Coupling: medium.
+- Retry resets providerPaymentId, so late webhooks for old provider sessions may not find a local payment.
+- Expiry updates payments to `EXPIRED` but does not emit failure/unlock/notify events.
+- Dedup by provider id + payload hash allows multiple status payloads for same provider id; this is usually acceptable but must be understood.
+- Mock provider behavior treats missing Moyasar secret as paid during verification.
 
-`DealsService`:
+## NotificationsService and Processor
 
-- Responsibility: create deals, notify enrichers, submit/update proposals.
-- Risks: employee route allowed but not implemented; notifying all enrichers uses full user scan and in-memory role filter.
-- Coupling: medium.
+Files:
 
-`TestsService`:
+- [src/notifications/notifications.service.ts](src/notifications/notifications.service.ts)
+- [src/notifications/queues/notification.processor.ts](src/notifications/queues/notification.processor.ts)
 
-- Responsibility: legacy test creation/assignment/submission.
-- Risks: imports `Test` from `@nestjs/testing` instead of local `entities/test.entity`, causing repository injection/entity mismatch. Update/remove are stubs and controller converts UUID to number.
-- Coupling: low but likely broken.
+Responsibility: queue notification delivery and list/read in-app notifications.
 
-## 8. Technical Debt & Risks
+Dependencies: Bull queue, `Notification` and `User` repositories, `EmailProvider`, `InAppProvider`.
 
-High-risk issues:
+Risks:
 
-- `src/app.module.ts`: `port: Number(process.env.DB_HOST)` should likely be `DB_PORT`; `Boolean(process.env.DB_SYNCHRONIZE)` makes `"false"` true.
-- No migrations were found. With `synchronize` misparsed, production schema safety is at risk.
-- Email verification token mismatch across `AuthProvider` and `MailerService`.
-- Multiple UUID routes still use `+id` and service stubs (`OrganizationsController`, `SessionController`, `TestsController` update/remove).
-- `TestsService` imports the wrong `Test` class from `@nestjs/testing`.
-- Owner/teacher access scoping is incomplete in evaluation attempt retrieval.
-- Several controllers expose destructive or broad read routes without role/ownership policies.
+- No outbox pattern; event listener failures can throw during event handling.
+- Notification jobs do not appear tied to database transactions.
+- Console logs remain in controller.
 
-Duplicated state:
+## AuthProvider and UsersService
 
-- `Child.attemptsUsed` / `retakeUsed` duplicate information in `EvaluationAttempt` and `ChildPrivateAttempt`.
-- `EvaluationAttempt.score/result` duplicate derived data from answers and scoring rules.
-- `EvaluationAnswer.scoreValue` duplicates selected answer score intentionally, but scoring changes will not retroactively apply.
+Files:
+
+- [src/users/services/auth.provider.ts](src/users/services/auth.provider.ts)
+- [src/users/services/users.service.ts](src/users/services/users.service.ts)
+
+Responsibility: login/signup/token/session/role seeding/user mutation.
+
+Risks:
+
+- Verification token payload mismatch.
+- Refresh session lookup ignores token/session id and expiry.
+- `UserRole.EMPLOYEE` compile break.
+- `UsersService.create()` uses `this.roleRepo` even when called inside a transaction; role reads are outside manager.
+
+## ChildrenService
+
+File: [src/children/children.service.ts](src/children/children.service.ts)
+
+Responsibility: private child creation, institutional child+parent creation, child lookup/update/delete.
+
+Risks:
+
+- Writes relations not defined on `Child`.
+- `findAllByOrganization()` returns classes rather than direct children.
+- Update/delete operations do not enforce ownership/organization permissions.
+- Private child limit relies on nullable `classId`, but the column is not configured nullable.
+
+## OwnerEvaluationResultsService
+
+File: [src/evaluations/owner-evaluation-results.service.ts](src/evaluations/owner-evaluation-results.service.ts)
+
+Responsibility: owner-facing filters, report cards, class summaries/status, reminders.
+
+Risks:
+
+- Controller permits admin, service rejects admin.
+- `sendReminder()` filters by missing `Child.organization`; build fails.
+- Latest attempt selection depends on repository order. It orders by `submittedAt DESC`, then `startedAt DESC`, but null ordering may vary by DB.
+
+## DealsService
+
+File: [src/deals/deals.service.ts](src/deals/deals.service.ts)
+
+Responsibility: create deals, submit/update proposals, notify enrichers/owners.
+
+Risks:
+
+- Controller references missing `UserRole.EMPLOYEE`.
+- Service loads all users and filters enrichers in memory for every new deal.
+- Proposal acceptance/closing workflow is not implemented.
+
+# 8. Technical Debt & Risks
+
+High-impact issues:
+
+- The project does not currently build. Confirmed by `cmd /c npm run build`; errors include missing `UserRole.EMPLOYEE`, missing `Child.organization`, and missing `Child.user`.
+- Entity/service mismatch around `Child` is central. Multiple workflows assume child has direct organization and creator/user relations that are not modeled.
+- TypeORM config has a DB port bug and unsafe boolean parsing.
+- No migrations exist. Production schema safety is weak if relying on `synchronize`.
+- `Child.classId` is semantically nullable but column metadata is not nullable.
+- `OrganizationService.isOrgMember()` compares teacher profile id to user id.
+- Email verification token payload mismatch likely breaks verification.
+- `AuthController.refresh()` chooses any valid session by userId and does not check session expiry.
+- `TestsService` uses the wrong `Test` import and has UUID-to-number stubs, so the legacy tests module is unreliable.
 
 Race/transaction risks:
 
-- Notifications are enqueued inside transactions in signup and child/evaluation flows. A job may observe state before commit or survive a rollback.
-- Payment extra approval sets attempt to `PENDING_PAYMENT` before provider checkout is created; provider failure can strand state.
-- Concurrent start attempts can race into unique constraint errors.
-- Refresh token lookup uses `findValidSession(userId)` and returns one arbitrary session, not the matching token/session.
+- Slot creation and entitlement consumption lack unique constraints for active slots.
+- Some repository calls with locks are made outside the transaction manager.
+- Event emission happens inside some transactions. If listeners fail or side effects run before transaction commit, behavior can become inconsistent.
+- Payment retry can orphan old provider webhooks.
 
-Null-driven logic:
+Fragile logic:
 
-- `Child.organization == null` is the private-child flag. This is simple but makes accidental nulls semantically significant.
-- `Evaluation.expiresAt == null` means no expiry.
-- Nullable `paymentId` and `evaluationAttemptId` drive entitlement status alongside enum status.
+- Private vs institutional child detection is inconsistent (`class == null` vs `organization == null`).
+- Evaluation `institutionId` is a raw UUID and not constrained to `Organization`.
+- Class stores organization separately from grade; mismatch possible.
+- Owner report uses approved latest attempt only for stats, but latest attempt selection can obscure older approved attempts if a newer submitted/in-progress attempt exists.
+- `Boolean(process.env.DB_SYNCHRONIZE)` is almost always wrong.
 
 Scalability concerns:
 
-- `DealsService.notifyServiceProviders()` loads all users and filters roles in memory.
-- Owner reports fetch attempts and aggregate in application code.
-- Notification and payment queues have basic concurrency but no dead-letter/outbox model.
-- Eager-loaded roles may bloat JWT payload and user queries.
+- Enricher notifications load all users and filter in memory.
+- Owner reports load classes, children, and attempts broadly; may need pagination/aggregation for large institutions.
+- Notifications and payments use queues, but there is no explicit outbox for reliable domain-event-to-queue handoff.
 
-Inconsistent patterns:
-
-- Some entities use explicit snake_case join columns, others rely on defaults.
-- DTO validation quality varies; some DTOs use `@IsNotEmptyObject()` on arrays.
-- Controllers sometimes enforce roles; services sometimes enforce roles; no single policy layer.
-- Arabic strings appear mojibake-encoded in source/output, indicating file encoding or display issues.
-
-## 9. Suggested Refactors
+# 9. Suggested Refactors
 
 HIGH:
 
-- Fix configuration parsing in `AppModule`: use `DB_PORT`, parse booleans explicitly, disable `synchronize` outside local dev, add TypeORM migrations.
-- Fix auth verification token payload and consolidate verification email generation in one service.
-- Repair access control for users/children/classes/evaluation attempts; apply ownership/org policies consistently.
-- Fix `TestsService` wrong import and UUID-to-number controller stubs, or explicitly deprecate the legacy tests module.
-- Correct organization membership checks for teachers (`teacher.user.id` vs `teacher.id`) and `Class.organization` inverse relation.
-- Add transaction-safe side effects: outbox pattern or enqueue after commit for notifications/payment events.
+- Fix compile-breaking domain model mismatch: decide whether `Child` belongs directly to `Organization` or only via `Class`; update entity, services, DTOs, and queries consistently.
+- Remove or add `UserRole.EMPLOYEE`. If employees are required, add entity/service workflows and permissions; otherwise delete references in users/deals.
+- Fix TypeORM config: `DB_PORT`, explicit boolean parsing, migrations, and disable `synchronize` outside local development.
+- Make `classId` nullable in `Child` if private children remain classless.
+- Fix email verification token payload shape and refresh-session validation.
+- Add ownership/organization guards to child/class/grade/test update/delete/list routes.
 
 MEDIUM:
 
-- Split `EvaluationsService` and `PrivateChildAttemptsService` policies into smaller services/state machines.
-- Replace child attempt counters with computed state or a single authoritative ledger.
-- Add DB constraints/indexes: unique active private entitlement per child/kind/status where applicable, unique provider payment id when non-null, FK relation for `Evaluation.institutionId`.
-- Implement proposal acceptance/deal closing or hide unused statuses.
-- Make owner reports admin-compatible by accepting explicit organization context or changing role annotations.
-- Normalize route naming (`/sessions`) and remove debug endpoints/logs from mailer/notifications/uploads.
+- Extract evaluation lifecycle into focused services and a state-machine/policy layer.
+- Replace raw `institutionId` on `Evaluation` with a relation or enforce FK manually through migrations.
+- Add DB constraints for active private slots, class-grade-organization consistency, and payment/privateAttempt linkage.
+- Implement an outbox pattern for payment/evaluation events that trigger notifications or slot unlocks.
+- Normalize organization membership checks for owner, teacher, and future employee roles.
+- Move scoring rules out of hard-coded service branches into strategy classes or versioned configuration.
 
 LOW:
 
-- Move hard-coded scoring labels/thresholds into versioned config tables.
-- Introduce response DTOs for sensitive entities to avoid leaking password hashes where class serialization is bypassed.
-- Replace string statuses in legacy tests/profile with enums.
-- Improve file upload validation, MIME/type limits, and returned file URL.
-- Add richer unit tests around private attempt/payment/evaluation transitions.
+- Remove placeholder CRUD endpoints returning strings.
+- Remove console logs from controllers/services.
+- Rename typo endpoints/methods (`verfy`, `asign`, `isAlreadyExits`).
+- Replace numeric `SlotKind` with string enum values for easier DB/debug readability.
+- Add pagination to admin/user/class/deal/report list endpoints.
 
-## 10. AI Guidance Section
+# 10. AI Guidance Section
+
+Future AI agents should treat this file as a map, but verify touched code because the current code has known compile-breaking mismatches.
 
 Coding conventions:
 
-- Follow `CONVENTIONS.md`: kebab-case files, plural resource routes, DTO validation, UUID strings with `ParseUUIDPipe`, explicit snake_case table names.
-- Prefer TypeORM repositories and `DataSource.transaction()` where business state changes cross entities.
-- Use `@Roles()` in controllers for coarse access, but enforce ownership/org rules in services.
-- Keep relations explicit with `@JoinColumn({ name: ... })` when adding new foreign keys.
-- Preserve global validation assumptions: DTOs should be strict and transform-friendly.
+- This is a NestJS modular codebase with controllers thinly delegating to services.
+- TypeORM repositories are injected with `@InjectRepository`.
+- Cross-entity writes often use `DataSource.transaction()`.
+- DTO validation uses `class-validator` and global whitelist/transform settings.
+- Roles are attached via `@Roles(...)`; public routes use `@Public()`.
 
 Patterns to preserve:
 
-- Payment webhook flow: raw-body signature validation -> dedup table -> Bull job -> provider verification -> locked DB transition -> event.
-- Evaluation form endpoint must not expose `scoreValue`, `minScore`, `maxScore`, or interpretation internals to parents.
-- `EvaluationAnswer` should continue storing denormalized score values unless a deliberate scoring version migration is designed.
-- Private children are identified by `organization IS NULL`; institutional children must have org/class consistency.
+- Keep answer score values hidden from parent-facing form APIs.
+- Use `EvaluationAnswer` upsert on `(attemptId, questionId)` for save-progress behavior.
+- Use pessimistic locks when changing attempt/payment/slot terminal state.
+- Keep payment provider integration behind `PaymentProvider`.
+- Queue notifications rather than sending them synchronously from controllers.
 
 Dangerous areas:
 
-- `EvaluationsService.startEvaluation()`, `submitAttempt()`, `approveAttempt()`.
-- `PrivateChildAttemptsService` state changes and `payment.success` listener.
-- `PaymentsService.runProcessPaymentWebhookJob()` and retry logic.
-- `ChildrenService.create()` because it creates/updates users and children in one transaction.
-- Any relation involving `Teacher`, `Organization`, `Class`, and user id/profile id.
+- `EvaluationsService.startEvaluation()`, `submitAttempt()`, and `maybeAutoSubmitIfExpired()` are the core attempt lifecycle. Small changes can alter scoring, attempts, retakes, and payment entitlements.
+- `PrivateChildAttemptsService` is coupled to payments and evaluations. Do not change slot transitions without updating payment-success and attempt-start flows.
+- `Child` ownership/private-vs-institution semantics are currently inconsistent. Fix this before adding new child/evaluation features.
+- `UsersService.seedRoles()` and `UserRole` must match exactly.
+- `AuthProvider.verifyEmail()` and `EmailProvider.sendVerificationEmail()` need payload consistency.
 
-Existing anti-patterns to avoid extending:
+Anti-patterns already present:
 
-- Do not add more UUID-to-number coercion.
-- Do not enqueue external side effects from inside transactions unless you accept rollback inconsistency.
-- Do not expose raw entities on broad list endpoints if sensitive fields/relations can leak.
-- Do not add more business rules as scattered controller conditions; centralize in services or policy classes.
-- Do not add new magic string statuses where enums already exist.
+- Services reference entity fields that do not exist.
+- Controllers expose update/delete/list operations without ownership checks.
+- Some modules contain placeholder methods returning strings.
+- Business state is duplicated across attempt status, slot status, payment status, `isPaid`, and approval rows.
+- Some queries rely on relation columns that are not declared as scalar fields.
 
 Recommended extension patterns:
 
-- For new evaluation lifecycle rules, create policy/state-machine helpers and call them from `EvaluationsService` instead of expanding nested conditions.
-- For new payment providers, implement `PaymentProvider`, bind it through `PAYMENT_PROVIDER`, and keep provider-specific webhook parsing/signature logic in the provider class.
-- For new notification types, enqueue through `NotificationsService`; include `type` and metadata for frontend routing.
-- For organization-scoped features, resolve organization through a dedicated policy that supports owner, teacher, employee, and admin consistently.
-- For background side effects, prefer events plus queues, and consider adding an outbox table before increasing cross-module side effects.
+- For new evaluation features, add policy methods first: `canStart`, `canSave`, `canSubmit`, `canApprove`, `canView`.
+- For new state transitions, model allowed transitions explicitly and test invalid transitions.
+- For anything payment-related, make local DB state authoritative and use provider verification before granting access.
+- For organization-scoped access, resolve organization from actor once and pass it through the service; do not trust route `orgId` alone.
+- For new reports, prefer query-builder aggregation or pagination instead of loading full object graphs.
+- For new notifications triggered by domain changes, prefer a durable outbox over direct event listener side effects when consistency matters.
 
+Verification performed while creating this document:
+
+- `cmd /c npm run build` was run and failed with 10 TypeScript errors caused by the role/entity mismatches described above.

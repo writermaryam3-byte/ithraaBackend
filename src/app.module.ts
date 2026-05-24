@@ -55,7 +55,8 @@ import { DealsModule } from 'src/deals/deals.module';
       database: process.env.DB_DATABASE,
       // entities: [],
       autoLoadEntities: true,
-      synchronize: Boolean(process.env.DB_SYNCHRONIZE),
+
+      synchronize: process.env.DB_SYNCHRONIZE === 'true',
     }),
     UsersModule,
     OrganizationsModule,

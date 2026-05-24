@@ -33,15 +33,6 @@ export class CreateChildDto {
   gender: Gender;
 
   @ApiProperty({
-    description: 'organization ID',
-    example: '0a7d391a-a4e5-4716-89c3-158a97919c89',
-    format: 'uuid',
-  })
-  @IsOptional()
-  @IsUUID()
-  organizationId?: string;
-
-  @ApiProperty({
     description: 'class ID',
     example: '0a7d391a-a4e5-4716-89c3-158a97919c89',
     format: 'uuid',

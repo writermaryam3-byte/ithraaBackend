@@ -103,26 +103,6 @@ export class ChildrenService {
     currentUser: JwtRequestUser,
   ) {
     return this.dataSource.transaction(async (manager) => {
-      // check organization
-      if (
-        createChildWithParentDto.child.organizationId &&
-        createChildWithParentDto.child.classId
-      ) {
-        await this.organizationsService.findOneOrFail(
-          createChildWithParentDto.child.organizationId,
-        );
-        if (
-          !(await this.clsService.isOrgCls(
-            createChildWithParentDto.child.classId,
-            createChildWithParentDto.child.organizationId,
-          ))
-        ) {
-          throw new NotFoundException(
-            `This class with id ${createChildWithParentDto.child.classId} is not found in organization with id ${createChildWithParentDto.child.organizationId}`,
-          );
-        }
-      }
-
       // check user (creator)
       await this.usersService.findById(currentUser.userId);
 
@@ -189,9 +169,6 @@ export class ChildrenService {
         name: createChildWithParentDto.child.name,
         birthDate: createChildWithParentDto.child.birthDate,
         gender: createChildWithParentDto.child.gender,
-        organization: createChildWithParentDto.child.organizationId
-          ? { id: createChildWithParentDto.child.organizationId }
-          : null,
 
         class: createChildWithParentDto.child.classId
           ? { id: createChildWithParentDto.child.classId }

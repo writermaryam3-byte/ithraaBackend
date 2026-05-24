@@ -66,7 +66,7 @@ export class User {
   @OneToOne(() => Teacher, (teacher) => teacher.user)
   teacher: Teacher;
 
-  @OneToMany(() => Child, (child) => child.user)
+  @OneToMany(() => Child, (child) => child.createdBy)
   children: Child[];
 
   @OneToMany(() => Child, (child) => child.parent)

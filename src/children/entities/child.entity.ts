@@ -49,6 +49,10 @@ export class Child {
   @JoinColumn({ name: 'createdById' })
   createdBy: User;
 
+  @Index()
+  @Column({ type: 'uuid' })
+  parentId: string;
+
   @ManyToOne(() => User, (user) => user.children, { onDelete: 'CASCADE' })
   @JoinColumn({ name: 'parentId' })
   parent: User;
