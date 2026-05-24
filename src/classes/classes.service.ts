@@ -35,7 +35,7 @@ export class ClassesService {
     const organization = await this.orgService.findByOwner(currentUser.userId);
     const cls = this.classesRepo.create({
       name,
-      grade,
+      grade: grade.grade,
       organization,
     });
     if (teacherId) {

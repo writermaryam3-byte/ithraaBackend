@@ -43,9 +43,24 @@ export class GradesService {
   }
 
   async findOne(id: string) {
-    const grade = await this.gradeRepo.findOne({ where: { id } });
+    const grade = await this.gradeRepo.findOne({
+      where: { id },
+      relations: { classes: { children: true } },
+    });
     if (!grade) throw new NotFoundException(`Grade with ID ${id} not found`);
-    return grade;
+    return {
+      grade: {
+        id: grade.id,
+        name: grade.name,
+        organizationId: grade.organizationId,
+        classes: grade.classes,
+        classesCount: grade.classes.length,
+        childrenCount: grade.classes.reduce(
+          (accu, curr) => accu + curr.children.length,
+          0,
+        ),
+      },
+    };
   }
   async findOneOrFail(id: string) {
     const grade = await this.gradeRepo.findOneBy({ id });
