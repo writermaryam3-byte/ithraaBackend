@@ -22,6 +22,7 @@ import { NotificationsService } from 'src/notifications/notifications.service';
 import { NotificationDelivery } from 'src/notifications/enums/notification-delivery.enum';
 import { JwtRequestUser } from 'src/common/interfaces/jwt-request-user.interface';
 import { ClassesService } from 'src/classes/classes.service';
+import { AttemptUsageService } from 'src/evaluations/attempt-usage.service';
 
 @Injectable()
 export class ChildrenService {
@@ -35,6 +36,7 @@ export class ChildrenService {
     private dataSource: DataSource,
     private authService: AuthProvider,
     private notificationsService: NotificationsService,
+    private attemptUsageservice: AttemptUsageService,
   ) {}
 
   async isPrivateChild(id: string) {
@@ -81,7 +83,25 @@ export class ChildrenService {
       where: { parent: { id: parentId }, classId: IsNull() },
       order: { createdAt: 'DESC' },
     });
-    return { children, count };
+
+    return {
+      children: await Promise.all(
+        children.map(async (child) => {
+          const usage = await this.attemptUsageservice.getUsage(
+            child.id,
+            parentId,
+            this.dataSource.manager,
+          );
+
+          return {
+            ...child,
+            retakeUsed: usage.hasRetake,
+            attemptsUsed: usage.totalAttempts,
+          };
+        }),
+      ),
+      count,
+    };
   }
 
   async findOrgChildrenForParent(parentId: string) {
@@ -94,7 +114,24 @@ export class ChildrenService {
       order: { createdAt: 'DESC' },
     });
 
-    return { children, count };
+    return {
+      children: await Promise.all(
+        children.map(async (child) => {
+          const usage = await this.attemptUsageservice.getUsage(
+            child.id,
+            parentId,
+            this.dataSource.manager,
+          );
+
+          return {
+            ...child,
+            retakeUsed: usage.hasRetake,
+            attemptsUsed: usage.totalAttempts,
+          };
+        }),
+      ),
+      count,
+    };
   }
 
   async create(
@@ -215,7 +252,7 @@ export class ChildrenService {
     const classes = await this.clsService.findClassesByOrg(orgId);
 
     return {
-      classes,
+      children: classes.classes.flatMap((cls) => cls.children),
     };
   }
 

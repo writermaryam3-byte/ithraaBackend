@@ -1,49 +1,40 @@
 import {
   BadRequestException,
   ForbiddenException,
+  Inject,
   Injectable,
   NotFoundException,
+  forwardRef,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { OnEvent } from '@nestjs/event-emitter';
 import { InjectRepository } from '@nestjs/typeorm';
 import { DataSource, EntityManager, IsNull, Repository } from 'typeorm';
-import { Child } from './entities/child.entity';
+import { Child } from 'src/children/entities/child.entity';
 import { NotificationDelivery } from 'src/notifications/enums/notification-delivery.enum';
 import { NotificationsService } from 'src/notifications/notifications.service';
 import { PaymentsService } from 'src/payments/payments.service';
 import type { PaymentSuccessEventPayload } from 'src/payments/payments.events';
 import { PAYMENT_EVENTS } from 'src/payments/payments.events';
-import { AttemptUsageService } from 'src/evaluations/attempt-usage.service';
-import { SlotKind } from '../evaluations/enums/evaluation-slot-kind.enum';
-import { SlotStatus } from '../evaluations/enums/evaluation-slot-status.enum';
-import { EvaluationSlot } from 'src/evaluations/entities/evaluation-slot.entity';
-import { ChildrenService } from './children.service';
+import { AttemptUsageService } from '../attempt-usage.service';
+import { EvaluationSlot } from '../entities/evaluation-slot.entity';
+import { SlotKind } from '../enums/evaluation-slot-kind.enum';
+import { SlotStatus } from '../enums/evaluation-slot-status.enum';
 
 @Injectable()
-export class PrivateChildAttemptsService {
+export class EvaluationSlotService {
   constructor(
     private readonly dataSource: DataSource,
     @InjectRepository(Child)
     private readonly children: Repository<Child>,
     @InjectRepository(EvaluationSlot)
-    private readonly privateAttempts: Repository<EvaluationSlot>,
+    private readonly slots: Repository<EvaluationSlot>,
+    @Inject(forwardRef(() => PaymentsService))
     private readonly payments: PaymentsService,
     private readonly notifications: NotificationsService,
     private readonly attemptUsageService: AttemptUsageService,
-    private readonly childrenService: ChildrenService,
     private readonly config: ConfigService,
   ) {}
-
-  async assertCanStartAttempt(child: Child, parentId: string) {
-    const usage = await this.attemptUsageService.getUsage(child.id, parentId);
-
-    if (!(await this.childrenService.isPrivateChild(child.id))) {
-      if (usage.totalAttempts >= 2) {
-        throw new BadRequestException('Max attempts reached');
-      }
-    }
-  }
 
   private extraAttemptPriceSar(): number {
     return Number(this.config.get<string>('EXTRA_ATTEMPT_PRICE_SAR') ?? '199');
@@ -52,26 +43,40 @@ export class PrivateChildAttemptsService {
   async loadPrivateChildOrThrow(
     childId: string,
     parentId: string,
+    manager?: EntityManager,
   ): Promise<Child> {
-    const child = await this.children.findOne({
+    const repo = manager?.getRepository(Child) ?? this.children;
+    const child = await repo.findOne({
       where: { id: childId, parent: { id: parentId }, classId: IsNull() },
     });
+
     if (!child) {
       throw new ForbiddenException('Private child not found for this parent');
     }
+
     return child;
   }
 
   async startMainSlot(childId: string, parentId: string) {
-    const usage = await this.attemptUsageService.getUsage(childId, parentId);
-    if (usage.totalAttempts > 0) {
-      throw new BadRequestException(
-        'Main attempt already started or completed for this child',
-      );
-    }
     return this.dataSource.transaction(async (manager) => {
-      const repo = manager.getRepository(EvaluationSlot);
+      const child = await this.loadPrivateChildOrThrow(
+        childId,
+        parentId,
+        manager,
+      );
+      const usage = await this.attemptUsageService.getUsage(
+        child.id,
+        parentId,
+        manager,
+      );
 
+      if (usage.totalAttempts > 0) {
+        throw new BadRequestException(
+          'Main attempt already started or completed for this child',
+        );
+      }
+
+      const repo = manager.getRepository(EvaluationSlot);
       const existing = await repo.findOne({
         where: {
           childId,
@@ -87,186 +92,204 @@ export class PrivateChildAttemptsService {
         return existing;
       }
 
-      const row = repo.create({
-        childId,
-        parentId,
-        kind: SlotKind.MAIN,
-        status: SlotStatus.READY,
-        isPaid: false,
-        requiresApproval: false,
-        evaluationAttemptId: null,
-        paymentId: null,
-      });
-      return repo.save(row);
+      return repo.save(
+        repo.create({
+          childId,
+          parentId,
+          kind: SlotKind.MAIN,
+          status: SlotStatus.READY,
+          isPaid: false,
+          requiresApproval: false,
+          evaluationAttemptId: null,
+          paymentId: null,
+        }),
+      );
     });
   }
 
   async requestRetake(childId: string, parentId: string) {
-    const child = await this.loadPrivateChildOrThrow(childId, parentId);
-    const usage = await this.attemptUsageService.getUsage(childId, parentId);
-
-    if (usage.totalAttempts < 1) {
-      throw new BadRequestException('Complete the main attempt before retake');
-    }
-    if (usage.hasRetake) {
-      throw new BadRequestException('Retake already used');
-    }
-
-    const open = await this.privateAttempts.findOne({
-      where: {
+    return this.dataSource.transaction(async (manager) => {
+      const child = await this.loadPrivateChildOrThrow(
         childId,
         parentId,
-        kind: SlotKind.RETAKE,
-        evaluationAttemptId: IsNull(),
-      },
-    });
-    if (open && open.status !== SlotStatus.COMPLETED) {
-      await this.notifyRetakeRequested(parentId, child.name);
-      return open;
-    }
+        manager,
+      );
+      const usage = await this.attemptUsageService.getUsage(
+        childId,
+        parentId,
+        manager,
+      );
 
-    const row = this.privateAttempts.create({
-      childId,
-      parentId,
-      kind: SlotKind.RETAKE,
-      status: SlotStatus.READY,
-      isPaid: false,
-      requiresApproval: false,
-      evaluationAttemptId: null,
-      paymentId: null,
+      if (usage.totalAttempts < 1) {
+        throw new BadRequestException('Complete the main attempt before retake');
+      }
+
+      if (usage.hasRetake) {
+        throw new BadRequestException('Retake already used');
+      }
+
+      const repo = manager.getRepository(EvaluationSlot);
+      const open = await repo.findOne({
+        where: {
+          childId,
+          parentId,
+          kind: SlotKind.RETAKE,
+          evaluationAttemptId: IsNull(),
+        },
+        lock: { mode: 'pessimistic_write' },
+      });
+
+      if (open && open.status !== SlotStatus.COMPLETED) {
+        await this.notifyRetakeRequested(parentId, child.name);
+        return open;
+      }
+
+      const saved = await repo.save(
+        repo.create({
+          childId,
+          parentId,
+          kind: SlotKind.RETAKE,
+          status: SlotStatus.READY,
+          isPaid: false,
+          requiresApproval: false,
+          evaluationAttemptId: null,
+          paymentId: null,
+        }),
+      );
+      await this.notifyRetakeRequested(parentId, child.name);
+      return saved;
     });
-    const saved = await this.privateAttempts.save(row);
-    await this.notifyRetakeRequested(parentId, child.name);
-    return saved;
   }
 
   async requestExtraAttempt(childId: string, parentId: string) {
-    const child = await this.loadPrivateChildOrThrow(childId, parentId);
-    const usage = await this.attemptUsageService.getUsage(childId, parentId);
-
-    if (usage.totalAttempts < 2 || !usage.hasRetake) {
-      throw new BadRequestException(
-        'Both free attempts must be completed before requesting an extra attempt',
-      );
-    }
-
-    const pending = await this.privateAttempts.findOne({
-      where: {
+    return this.dataSource.transaction(async (manager) => {
+      const child = await this.loadPrivateChildOrThrow(
         childId,
         parentId,
-        kind: SlotKind.EXTRA,
-      },
-      order: { createdAt: 'DESC' },
-    });
-    if (
-      pending &&
-      pending.status !== SlotStatus.COMPLETED &&
-      pending.status !== SlotStatus.REQUESTED
-    ) {
-      throw new BadRequestException(
-        'An extra attempt is already in progress or awaiting payment',
+        manager,
       );
-    }
-    if (pending && pending.status === SlotStatus.REQUESTED) {
-      throw new BadRequestException('Extra attempt already awaiting approval');
-    }
+      const usage = await this.attemptUsageService.getUsage(
+        childId,
+        parentId,
+        manager,
+      );
 
-    const row = this.privateAttempts.create({
-      childId,
-      parentId,
-      kind: SlotKind.EXTRA,
-      status: SlotStatus.REQUESTED,
-      isPaid: false,
-      requiresApproval: true,
-      evaluationAttemptId: null,
-      paymentId: null,
+      if (usage.totalAttempts < 2 || !usage.hasRetake) {
+        throw new BadRequestException(
+          'Both free attempts must be completed before requesting an extra attempt',
+        );
+      }
+
+      const repo = manager.getRepository(EvaluationSlot);
+      const pending = await repo.findOne({
+        where: {
+          childId,
+          parentId,
+          kind: SlotKind.EXTRA,
+        },
+        order: { createdAt: 'DESC' },
+        lock: { mode: 'pessimistic_write' },
+      });
+
+      if (
+        pending &&
+        pending.status !== SlotStatus.COMPLETED &&
+        pending.status !== SlotStatus.REQUESTED
+      ) {
+        throw new BadRequestException(
+          'An extra attempt is already in progress or awaiting payment',
+        );
+      }
+
+      if (pending && pending.status === SlotStatus.REQUESTED) {
+        throw new BadRequestException('Extra attempt already awaiting approval');
+      }
+
+      const saved = await repo.save(
+        repo.create({
+          childId,
+          parentId,
+          kind: SlotKind.EXTRA,
+          status: SlotStatus.REQUESTED,
+          isPaid: false,
+          requiresApproval: true,
+          evaluationAttemptId: null,
+          paymentId: null,
+        }),
+      );
+      await this.notifyExtraRequested(parentId, child.name, saved.id);
+      return saved;
     });
-    const saved = await this.privateAttempts.save(row);
-    await this.notifyExtraRequested(parentId, child.name, saved.id);
-    return saved;
   }
 
-  async adminApproveExtraAttempt(
-    privateAttemptId: string,
-    adminUserId: string,
-  ) {
+  async adminApproveExtraAttempt(privateAttemptId: string, adminUserId: string) {
     void adminUserId;
-    const attempt = await this.privateAttempts.findOne({
-      where: { id: privateAttemptId },
-      relations: { child: true, parent: true },
-    });
-    if (!attempt) throw new NotFoundException('Attempt request not found');
-    if (attempt.kind !== SlotKind.EXTRA) {
-      throw new BadRequestException('Not an extra attempt request');
-    }
-    if (attempt.status !== SlotStatus.REQUESTED) {
-      throw new BadRequestException('Extra attempt is not awaiting approval');
-    }
-    if (!attempt.requiresApproval) {
-      throw new BadRequestException('Extra attempt does not require approval');
-    }
+
     return this.dataSource.transaction(async (manager) => {
       const repo = manager.getRepository(EvaluationSlot);
-      const locked = await repo.findOne({
-        where: { id: attempt.id },
+      const slot = await repo.findOne({
+        where: { id: privateAttemptId },
         relations: { child: true, parent: true },
         lock: { mode: 'pessimistic_write' },
       });
-      if (!locked) throw new NotFoundException('Attempt request not found');
-      if (locked.status !== SlotStatus.REQUESTED) {
+
+      if (!slot) throw new NotFoundException('Attempt request not found');
+      if (slot.kind !== SlotKind.EXTRA) {
+        throw new BadRequestException('Not an extra attempt request');
+      }
+      if (slot.status !== SlotStatus.REQUESTED) {
         throw new BadRequestException('Extra attempt is not awaiting approval');
       }
+      if (!slot.requiresApproval) {
+        throw new BadRequestException('Extra attempt does not require approval');
+      }
 
-      locked.transitionTo(SlotStatus.AWAITING_PAYMENT);
+      slot.transitionTo(SlotStatus.AWAITING_PAYMENT);
 
       const checkout = await this.payments.createPaymentForPrivateExtraAttempt(
-        locked.parentId,
+        slot.parentId,
         {
-          childId: locked.childId,
-          privateAttemptId: locked.id,
+          childId: slot.childId,
+          privateAttemptId: slot.id,
           amount: this.extraAttemptPriceSar(),
           description: 'Extra child evaluation attempt',
         },
       );
-      locked.paymentId = checkout.id;
+      slot.paymentId = checkout.id;
 
-      await repo.save(locked);
+      await repo.save(slot);
       await this.notifyPaymentRequired(
-        locked.parentId,
-        locked.child.name,
+        slot.parentId,
+        slot.child.name,
         checkout.checkoutUrl,
         checkout.expiresAt,
       );
+
       return {
-        attempt: locked,
+        attempt: slot,
         payment: checkout,
       };
     });
   }
 
-  async initiateOrRefreshExtraPayment(
-    privateAttemptId: string,
-    parentId: string,
-  ) {
-    const attempt = await this.privateAttempts.findOne({
+  async initiateOrRefreshExtraPayment(privateAttemptId: string, parentId: string) {
+    const slot = await this.slots.findOne({
       where: { id: privateAttemptId, parentId },
       relations: { child: true },
     });
-    if (!attempt) throw new NotFoundException('Attempt not found');
-    if (attempt.status !== SlotStatus.AWAITING_PAYMENT) {
+
+    if (!slot) throw new NotFoundException('Attempt not found');
+    if (slot.status !== SlotStatus.AWAITING_PAYMENT) {
       throw new BadRequestException('Payment is not required for this attempt');
     }
-    if (!attempt.paymentId) {
+    if (!slot.paymentId) {
       throw new BadRequestException('No payment record linked to this attempt');
     }
 
-    const refreshed = await this.payments.retryPayment(
-      attempt.paymentId,
-      parentId,
-    );
+    const refreshed = await this.payments.retryPayment(slot.paymentId, parentId);
     await this.notifyPaymentRequired(
       parentId,
-      attempt.child.name,
+      slot.child.name,
       refreshed.checkoutUrl,
       refreshed.expiresAt,
     );
@@ -278,16 +301,13 @@ export class PrivateChildAttemptsService {
     childId: string,
     parentId: string,
   ): Promise<EvaluationSlot | null> {
-    const repo = manager.getRepository(EvaluationSlot);
-
-    return repo.findOne({
+    return manager.getRepository(EvaluationSlot).findOne({
       where: {
         childId,
         parentId,
         status: SlotStatus.READY,
         evaluationAttemptId: IsNull(),
       },
-
       order: {
         createdAt: 'ASC',
       },
@@ -302,10 +322,12 @@ export class PrivateChildAttemptsService {
   ): Promise<void> {
     const repo = manager.getRepository(EvaluationSlot);
     const row = await repo.findOne({
-      where: { id: entitlementId },
+      where: { id: entitlementId, status: SlotStatus.READY },
       lock: { mode: 'pessimistic_write' },
     });
-    if (!row) throw new NotFoundException('Entitlement not found');
+
+    if (!row) throw new NotFoundException('Ready entitlement not found');
+
     row.transitionTo(SlotStatus.CONSUMED);
     row.evaluationAttemptId = evaluationAttemptId;
     await repo.save(row);
@@ -316,22 +338,22 @@ export class PrivateChildAttemptsService {
     evaluationAttemptId: string,
     childId: string,
   ): Promise<void> {
+    const child = await manager.getRepository(Child).findOne({
+      where: { id: childId },
+      lock: { mode: 'pessimistic_write' },
+    });
+    if (!child || child.classId !== null) return;
+
     const repo = manager.getRepository(EvaluationSlot);
     const row = await repo.findOne({
       where: { evaluationAttemptId },
       lock: { mode: 'pessimistic_write' },
     });
-    if (row) {
-      row.transitionTo(SlotStatus.COMPLETED);
-      await repo.save(row);
-    }
 
-    const childRepo = manager.getRepository(Child);
-    const child = await childRepo.findOne({
-      where: { id: childId },
-      lock: { mode: 'pessimistic_write' },
-    });
-    if (!child) return;
+    if (!row) return;
+
+    row.transitionTo(SlotStatus.COMPLETED);
+    await repo.save(row);
   }
 
   @OnEvent(PAYMENT_EVENTS.SUCCESS)

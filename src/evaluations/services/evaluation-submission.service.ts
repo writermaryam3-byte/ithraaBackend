@@ -1,58 +1,222 @@
 import {
   BadRequestException,
   Injectable,
+  Logger,
   NotFoundException,
 } from '@nestjs/common';
-import { InjectRepository } from '@nestjs/typeorm';
-import { PrivateChildAttemptsService } from 'src/children/private-child-attempts.service';
-import { DataSource, Repository } from 'typeorm';
+import { EventEmitter2 } from 'eventemitter2';
+import { DataSource } from 'typeorm';
+import { Child } from 'src/children/entities/child.entity';
+import { UserRole } from 'src/common/enums/role.enum';
+import { SubmitAttemptDto } from '../dto/submit-attempt.dto';
+import { EvaluationAnswer } from '../entities/evaluation-answer.entity';
 import { EvaluationAttempt } from '../entities/evaluation-attempt.entity';
-import { EvaluationScoringService } from '../evaluations-scoring-services.service';
+import { Evaluation } from '../entities/evaluation.entity';
 import { EvaluationAttemptStatus } from '../enums/evaluation-attempt-status.enum';
+import { EVALUATION_EVENTS } from '../evaluations.events';
+import { EvaluationScoringService } from '../evaluations-scoring-services.service';
+import {
+  EvaluationAccessPolicy,
+  EvaluationActor,
+} from './evaluation-access-policy.service';
+import { EvaluationAnswerBuilderService } from './evaluation-answer-builder.service';
+import { EvaluationSlotService } from './evaluation-slot.service';
+
+type EvaluationSubmittedPayload = {
+  attemptId: string;
+  evaluationId: string;
+  parentId: string;
+  childId: string;
+  score: number | null;
+  result: Record<string, unknown> | null;
+  autoSubmitted: boolean;
+};
 
 @Injectable()
 export class EvaluationSubmissionService {
+  private readonly logger = new Logger(EvaluationSubmissionService.name);
+
   constructor(
     private readonly dataSource: DataSource,
-    @InjectRepository(EvaluationAttempt)
-    private readonly attempts: Repository<EvaluationAttempt>,
-    private readonly slots: PrivateChildAttemptsService,
+    private readonly events: EventEmitter2,
+    private readonly access: EvaluationAccessPolicy,
+    private readonly answers: EvaluationAnswerBuilderService,
     private readonly scoring: EvaluationScoringService,
+    private readonly slots: EvaluationSlotService,
   ) {}
 
-  async submit(attemptId: string, parentId: string) {
-    return this.dataSource.transaction(async (manager) => {
-      const repo = manager.getRepository(EvaluationAttempt);
+  async submitAttempt(
+    attemptId: string,
+    dto: SubmitAttemptDto,
+    actor: EvaluationActor,
+  ) {
+    this.access.assertHasRole(actor, [UserRole.PARENT]);
 
-      const attempt = await repo.findOne({
-        where: { id: attemptId, parentId },
-        relations: { answers: true },
+    let eventPayload: EvaluationSubmittedPayload | null = null;
+
+    const submitted = await this.dataSource.transaction(async (manager) => {
+      const attemptRepo = manager.getRepository(EvaluationAttempt);
+      const answerRepo = manager.getRepository(EvaluationAnswer);
+      const evalRepo = manager.getRepository(Evaluation);
+
+      const attempt = await attemptRepo.findOne({
+        where: { id: attemptId },
         lock: { mode: 'pessimistic_write' },
       });
 
-      if (!attempt) throw new NotFoundException();
+      if (!attempt) throw new NotFoundException('Attempt not found');
+
+      this.access.assertParentOwnership(attempt, actor);
+
       if (attempt.status !== EvaluationAttemptStatus.IN_PROGRESS) {
-        throw new BadRequestException('Already submitted');
+        throw new BadRequestException('Attempt is locked');
       }
 
-      // ✅ scoring
-      const result = this.scoring.calculate(
-        attempt.evaluation,
-        attempt.answers,
-      );
+      const now = new Date();
+      const expired =
+        attempt.expiresAt instanceof Date &&
+        now.getTime() > attempt.expiresAt.getTime();
+
+      const rows = await this.answers.buildRows(manager, attempt, dto.answers);
+      await answerRepo.upsert(rows, ['attemptId', 'questionId']);
+
+      const savedAnswers = await answerRepo.find({
+        where: { attemptId: attempt.id },
+        relations: {
+          evaluationDimension: true,
+          selectedAnswer: true,
+        },
+      });
+
+      const evaluation = await evalRepo.findOne({
+        where: { id: attempt.evaluationId },
+        relations: {
+          dimensions: true,
+        },
+      });
+
+      if (!evaluation) {
+        throw new NotFoundException('Evaluation not found');
+      }
+
+      const result = this.scoring.calculate(evaluation, savedAnswers);
+      const totalScore =
+        'totalScore' in result && typeof result.totalScore === 'number'
+          ? result.totalScore
+          : null;
+
       attempt.status = EvaluationAttemptStatus.SUBMITTED;
+      attempt.submittedAt = now;
+      attempt.score = totalScore;
       attempt.result = result;
 
-      await repo.save(attempt);
-
-      // ✅ complete slot
+      await attemptRepo.save(attempt);
       await this.slots.markPrivateAttemptCompleted(
         manager,
         attempt.id,
         attempt.childId,
       );
 
-      return attempt;
+      eventPayload = {
+        attemptId: attempt.id,
+        evaluationId: attempt.evaluationId,
+        parentId: attempt.parentId,
+        childId: attempt.childId,
+        score: totalScore,
+        result,
+        autoSubmitted: expired,
+      };
+
+      return attemptRepo.findOne({
+        where: { id: attempt.id },
+        relations: {
+          answers: {
+            selectedAnswer: true,
+            evaluationDimension: true,
+          },
+          approval: true,
+          evaluation: true,
+        },
+      });
     });
+
+    if (eventPayload) {
+      this.events.emit(EVALUATION_EVENTS.submitted, eventPayload);
+    }
+
+    return submitted;
+  }
+
+  async maybeAutoSubmitIfExpired(attemptId: string) {
+    let eventPayload: EvaluationSubmittedPayload | null = null;
+
+    await this.dataSource.transaction(async (manager) => {
+      const attemptRepo = manager.getRepository(EvaluationAttempt);
+      const answerRepo = manager.getRepository(EvaluationAnswer);
+      const evalRepo = manager.getRepository(Evaluation);
+
+      const attempt = await attemptRepo.findOne({
+        where: { id: attemptId },
+        lock: { mode: 'pessimistic_write' },
+      });
+
+      if (!attempt) return;
+      if (attempt.status !== EvaluationAttemptStatus.IN_PROGRESS) return;
+      if (!attempt.expiresAt) return;
+
+      const now = new Date();
+      if (now.getTime() <= attempt.expiresAt.getTime()) return;
+
+      this.logger.warn(`Auto-submitting expired attempt ${attempt.id}`);
+
+      const savedAnswers = await answerRepo.find({
+        where: { attemptId: attempt.id },
+        relations: {
+          evaluationDimension: true,
+          selectedAnswer: true,
+        },
+      });
+
+      const evaluation = await evalRepo.findOne({
+        where: { id: attempt.evaluationId },
+        relations: {
+          dimensions: true,
+        },
+      });
+
+      if (!evaluation) return;
+
+      const result = this.scoring.calculate(evaluation, savedAnswers);
+      const totalScore =
+        'totalScore' in result && typeof result.totalScore === 'number'
+          ? result.totalScore
+          : null;
+
+      attempt.status = EvaluationAttemptStatus.SUBMITTED;
+      attempt.submittedAt = now;
+      attempt.score = totalScore;
+      attempt.result = result;
+
+      await attemptRepo.save(attempt);
+      await this.slots.markPrivateAttemptCompleted(
+        manager,
+        attempt.id,
+        attempt.childId,
+      );
+
+      eventPayload = {
+        attemptId: attempt.id,
+        evaluationId: attempt.evaluationId,
+        parentId: attempt.parentId,
+        childId: attempt.childId,
+        score: totalScore,
+        result: attempt.result,
+        autoSubmitted: true,
+      };
+    });
+
+    if (eventPayload) {
+      this.events.emit(EVALUATION_EVENTS.submitted, eventPayload);
+    }
   }
 }

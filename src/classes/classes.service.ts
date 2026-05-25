@@ -99,7 +99,7 @@ export class ClassesService {
         teacherName: cls.teacher?.user.name,
         organizationName: cls.grade.organization.organizationName,
         organizationId: cls.grade.organization.id,
-        children: cls.children.length,
+        children: cls.children,
       })),
     };
   }

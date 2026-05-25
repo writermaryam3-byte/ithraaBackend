@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { EntityManager, Repository } from 'typeorm';
 import { EvaluationAttempt } from './entities/evaluation-attempt.entity';
 import { EvaluationAttemptStatus } from './enums/evaluation-attempt-status.enum';
 
@@ -11,8 +11,9 @@ export class AttemptUsageService {
     private readonly attemptRepo: Repository<EvaluationAttempt>,
   ) {}
 
-  async getUsage(childId: string, parentId: string) {
-    const attempts = await this.attemptRepo.find({
+  async getUsage(childId: string, parentId: string, manager?: EntityManager) {
+    const repo = manager?.getRepository(EvaluationAttempt) ?? this.attemptRepo;
+    const attempts = await repo.find({
       where: { childId, parentId },
       order: { attemptNumber: 'ASC' },
     });

@@ -13,11 +13,11 @@ import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { Roles } from 'src/users/decorators/role.decorator';
 import { UserRole } from 'src/common/enums/role.enum';
 import { type AuthRequest } from 'src/common/interfaces/auth-request.interface';
-import { PrivateChildAttemptsService } from 'src/children/private-child-attempts.service';
 import { EvaluationsService } from './evaluations.service';
 import { SaveProgressDto } from './dto/save-progress.dto';
 import { SubmitAttemptDto } from './dto/submit-attempt.dto';
 import { EvaluationAttemptStatus } from './enums/evaluation-attempt-status.enum';
+import { EvaluationSlotService } from './services/evaluation-slot.service';
 
 type JwtRequestUser = {
   userId: string;
@@ -32,7 +32,7 @@ type JwtRequestUser = {
 export class AttemptsController {
   constructor(
     private readonly service: EvaluationsService,
-    private readonly privateChildAttempts: PrivateChildAttemptsService,
+    private readonly slots: EvaluationSlotService,
   ) {}
 
   @Roles(UserRole.ADMIN)
@@ -84,7 +84,7 @@ export class AttemptsController {
     @Req() req: AuthRequest,
   ) {
     const user = req.user as unknown as JwtRequestUser;
-    return this.privateChildAttempts.startMainSlot(childId, user.userId);
+    return this.slots.startMainSlot(childId, user.userId);
   }
 
   @Roles(UserRole.PARENT)
@@ -97,7 +97,7 @@ export class AttemptsController {
     @Req() req: AuthRequest,
   ) {
     const user = req.user as unknown as JwtRequestUser;
-    return this.privateChildAttempts.requestRetake(childId, user.userId);
+    return this.slots.requestRetake(childId, user.userId);
   }
 
   @Roles(UserRole.PARENT)
@@ -110,7 +110,7 @@ export class AttemptsController {
     @Req() req: AuthRequest,
   ) {
     const user = req.user as unknown as JwtRequestUser;
-    return this.privateChildAttempts.requestExtraAttempt(childId, user.userId);
+    return this.slots.requestExtraAttempt(childId, user.userId);
   }
 
   @Roles(UserRole.PARENT)

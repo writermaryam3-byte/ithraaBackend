@@ -16,6 +16,7 @@ import { Child } from 'src/children/entities/child.entity';
 import { EvaluationAttemptStatus } from '../enums/evaluation-attempt-status.enum';
 import { EvaluationAnswer } from './evaluation-answer.entity';
 import { EvaluationApproval } from './evaluation-approval.entity';
+import { EvaluationSlot } from './evaluation-slot.entity';
 
 @Entity('evaluation_attempts')
 @Unique('uq_eval_attempt_number', [
@@ -25,6 +26,10 @@ import { EvaluationApproval } from './evaluation-approval.entity';
   'attemptNumber',
 ])
 @Index('idx_eval_attempt_lookup', ['evaluationId', 'parentId', 'childId'])
+@Index('uq_eval_attempt_in_progress', ['evaluationId', 'parentId', 'childId'], {
+  unique: true,
+  where: `"status" = 'in_progress'`,
+})
 export class EvaluationAttempt {
   @PrimaryGeneratedColumn('uuid')
   id: string;
@@ -79,4 +84,7 @@ export class EvaluationAttempt {
 
   @Column({ type: 'jsonb', nullable: true })
   result: Record<string, unknown> | null;
+
+  @OneToOne(() => EvaluationSlot, (slot) => slot.evaluationAttempt)
+  slot: EvaluationSlot;
 }

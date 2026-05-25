@@ -9,7 +9,7 @@ import { PaymentProcessingProcessor } from './processors/payment-processing.proc
 import { MoyasarProvider } from './providers/moyasar.provider';
 import { PAYMENT_PROVIDER } from './interfaces/payment-provider.interface';
 import { PaymentsCronService } from './payments.cron';
-import { ChildrenModule } from 'src/children/children.module';
+import { EvaluationsModule } from 'src/evaluations/evaluations.module';
 
 @Module({
   imports: [
@@ -17,7 +17,7 @@ import { ChildrenModule } from 'src/children/children.module';
     BullModule.registerQueue({
       name: 'payment-processing',
     }),
-    forwardRef(() => ChildrenModule),
+    forwardRef(() => EvaluationsModule),
   ],
   controllers: [PaymentsController],
   providers: [

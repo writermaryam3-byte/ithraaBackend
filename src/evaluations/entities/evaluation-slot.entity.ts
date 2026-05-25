@@ -8,15 +8,23 @@ import {
   CreateDateColumn,
   UpdateDateColumn,
   Index,
-  Unique,
+  OneToOne,
 } from 'typeorm';
 import { SlotStatus } from '../enums/evaluation-slot-status.enum';
 import { Child } from 'src/children/entities/child.entity';
 import { SlotKind } from '../enums/evaluation-slot-kind.enum';
+import { EvaluationAttempt } from './evaluation-attempt.entity';
 
-@Unique(['id', 'evaluationAttemptId'])
 @Entity('evaluation_slot')
 @Index('idx_evaluation_slot_child_status', ['childId', 'status'])
+@Index('uq_evaluation_slot_active_kind', ['childId', 'parentId', 'kind'], {
+  unique: true,
+  where: `"status" IN ('READY', 'REQUESTED', 'AWAITING_PAYMENT', 'CONSUMED')`,
+})
+@Index('uq_evaluation_slot_attempt', ['evaluationAttemptId'], {
+  unique: true,
+  where: `"evaluationAttemptId" IS NOT NULL`,
+})
 export class EvaluationSlot {
   @PrimaryGeneratedColumn('uuid')
   id: string;
@@ -53,6 +61,10 @@ export class EvaluationSlot {
 
   @Column({ type: 'uuid', nullable: true })
   evaluationAttemptId: string | null;
+
+  @OneToOne(() => EvaluationAttempt, { nullable: true, onDelete: 'SET NULL' })
+  @JoinColumn({ name: 'evaluationAttemptId' })
+  evaluationAttempt: EvaluationAttempt | null;
 
   @Column({ type: 'uuid', nullable: true })
   paymentId: string | null;
