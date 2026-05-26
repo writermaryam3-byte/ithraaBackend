@@ -11,7 +11,7 @@ import {
   Req,
 } from '@nestjs/common';
 import { ChildrenService } from './children.service';
-import { CreateChildWithParentDto } from './dto/create-child.dto';
+import { CreateChildDto } from './dto/create-child.dto';
 import { UpdateChildDto } from './dto/update-child.dto';
 import { UserRole } from 'src/common/enums/role.enum';
 import { Roles } from 'src/users/decorators/role.decorator';
@@ -31,11 +31,11 @@ export class ChildrenController {
   })
   create(
     @Body()
-    createChildWithParentDto: CreateChildWithParentDto,
+    createChildDto: CreateChildDto,
     @Req()
     req: AuthRequest,
   ) {
-    return this.childrenService.create(createChildWithParentDto, req.user);
+    return this.childrenService.createChild(createChildDto, req.user);
   }
 
   @Roles(UserRole.ADMIN)

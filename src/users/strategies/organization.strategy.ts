@@ -15,6 +15,11 @@ export class OrganizationSignupStrategy implements SignupStrategy {
       organizationType: dto.organizationType,
       owner: user,
     });
-    void (await manager.save(organization));
+
+    await manager.save(organization);
+
+    user.organization = organization;
+
+    await manager.save(user);
   }
 }

@@ -15,6 +15,7 @@ import {
 import { ChildProfile } from './child-profile.entity';
 import { Class } from 'src/classes/entities/class.entity';
 import { EvaluationSlot } from 'src/evaluations/entities/evaluation-slot.entity';
+import { Organization } from 'src/organizations/entities/organization.entity';
 
 @Entity('children')
 export class Child {
@@ -40,6 +41,14 @@ export class Child {
   })
   @JoinColumn({ name: 'classId' })
   class: Class | null;
+
+  @Index()
+  @Column({ type: 'uuid', nullable: true })
+  organizationId: string | null;
+
+  @ManyToOne(() => Organization, { nullable: true, onDelete: 'CASCADE' })
+  @JoinColumn({ name: 'organizationId' })
+  organization: Organization | null;
 
   @Index()
   @Column({ type: 'uuid' })

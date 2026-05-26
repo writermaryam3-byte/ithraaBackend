@@ -6,23 +6,35 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { Child } from './entities/child.entity';
 import { ChildProfile } from './entities/child-profile.entity';
 import { ChildReport } from './entities/child-report.entity';
+import { TransferRequest } from './entities/transfer-request.entity';
 import { OrganizationsModule } from 'src/organizations/organizations.module';
 import { UsersModule } from 'src/users/users.module';
 import { NotificationsModule } from 'src/notifications/notifications.module';
 import { ClassesModule } from 'src/classes/classes.module';
 import { EvaluationsModule } from 'src/evaluations/evaluations.module';
+import { TransferService } from './transfer.service';
+import { TransfersController } from './transfers.controller';
 
 @Module({
-  controllers: [ChildrenController, ParentChildrenController],
-  providers: [ChildrenService],
+  controllers: [
+    ChildrenController,
+    ParentChildrenController,
+    TransfersController,
+  ],
+  providers: [ChildrenService, TransferService],
   imports: [
-    TypeOrmModule.forFeature([Child, ChildProfile, ChildReport]),
+    TypeOrmModule.forFeature([
+      Child,
+      ChildProfile,
+      ChildReport,
+      TransferRequest,
+    ]),
     OrganizationsModule,
     forwardRef(() => ClassesModule),
     UsersModule,
     NotificationsModule,
     EvaluationsModule,
   ],
-  exports: [TypeOrmModule, ChildrenService],
+  exports: [TypeOrmModule, ChildrenService, TransferService],
 })
 export class ChildrenModule {}
