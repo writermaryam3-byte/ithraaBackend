@@ -18,8 +18,8 @@ export class OrganizationsService {
     return this.organizationRepository.find();
   }
 
-  findOne(id: number) {
-    return `This action returns a #${id} organization`;
+  async findOne(id: string) {
+    return this.findOneOrFail(id);
   }
 
   async findOneOrFail(id: string) {
@@ -63,7 +63,7 @@ export class OrganizationsService {
   async isOrgMember(userId: string, orgId: string): Promise<boolean> {
     const org = await this.organizationRepository.findOne({
       where: { id: orgId },
-      relations: ['owner', 'teachers'],
+      relations: ['owner', 'teachers', 'teachers.user'],
     });
 
     if (!org) {
@@ -74,7 +74,9 @@ export class OrganizationsService {
       return true;
     }
 
-    const isTeacher = org.teachers?.some((teacher) => teacher.id === userId);
+    const isTeacher = org.teachers?.some(
+      (teacher) => teacher.user?.id === userId,
+    );
 
     return !!isTeacher;
   }
@@ -83,7 +85,11 @@ export class OrganizationsService {
     return this.organizationRepository.update(id, updateOrganizationDto);
   }
 
-  remove(id: number) {
-    return `This action removes a #${id} organization`;
+  async remove(id: string) {
+    const result = await this.organizationRepository.delete(id);
+    if (result.affected === 0) {
+      throw new NotFoundException('Organization not found');
+    }
+    return { message: 'Deleted successfully' };
   }
 }

@@ -5,10 +5,13 @@ import {
   IsEnum,
   IsUUID,
   IsNotEmptyObject,
+  IsEmail,
+  IsPhoneNumber,
+  Length,
 } from 'class-validator';
 import { Gender } from 'src/common/enums/gender.enum';
 import { BaseSignupDto } from 'src/users/dto/base-signup.dto';
-import { Type } from 'class-transformer';
+import { Transform, Type } from 'class-transformer';
 import { ValidateNested } from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
 
@@ -33,22 +36,31 @@ export class CreateChildDto {
   gender: Gender;
 
   @ApiProperty({
-    description: 'organization ID',
-    example: '0a7d391a-a4e5-4716-89c3-158a97919c89',
-    format: 'uuid',
-  })
-  @IsOptional()
-  @IsUUID()
-  organizationId?: string;
-
-  @ApiProperty({
     description: 'class ID',
     example: '0a7d391a-a4e5-4716-89c3-158a97919c89',
     format: 'uuid',
   })
-  @IsOptional()
   @IsUUID()
-  classId?: string;
+  classId: string;
+
+  @ApiProperty({ example: '+201503657687' })
+  @IsPhoneNumber()
+  parentPhone: string;
+
+  @ApiProperty({ example: 'parent@example.com', required: false })
+  @IsOptional()
+  @IsEmail()
+  @Transform(({ value }: { value?: string }) =>
+    value ? value.toLowerCase().trim() : value,
+  )
+  parentEmail?: string;
+
+  @ApiProperty({ example: 'Parent Name', required: false })
+  @IsOptional()
+  @IsString()
+  @Length(2, 50)
+  @Transform(({ value }: { value?: string }) => value?.trim())
+  parentName?: string;
 }
 
 export class CreateChildWithParentDto {

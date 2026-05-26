@@ -1,7 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { CreateSessionDto } from './dto/create-session.dto';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { MoreThan, Repository } from 'typeorm';
 import { Session } from './entities/session.entity';
 import bcrypt from 'bcrypt';
 @Injectable()
@@ -27,12 +27,20 @@ export class SessionService {
     return `This action returns all session`;
   }
 
-  findOne(id: number) {
-    return `This action returns a #${id} session`;
+  async findOne(id: string) {
+    return this.repo.findOneBy({ id });
   }
   async findValidSession(userId: string) {
     return this.repo.findOne({
-      where: { userId },
+      where: { userId, expiresAt: MoreThan(new Date()) },
+      order: { createdAt: 'DESC' },
+    });
+  }
+
+  async findValidSessions(userId: string) {
+    return this.repo.find({
+      where: { userId, expiresAt: MoreThan(new Date()) },
+      order: { createdAt: 'DESC' },
     });
   }
 

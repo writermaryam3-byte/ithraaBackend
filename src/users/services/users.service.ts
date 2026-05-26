@@ -30,7 +30,7 @@ export class UsersService {
   }
   async create(dto: CreateUserDto, roles: UserRole[], manager: EntityManager) {
     const hashed = await bcrypt.hash(dto.password, 10);
-    const dbRoles = await this.roleRepo.find({
+    const dbRoles = await manager.getRepository(Role).find({
       where: roles.map((r) => ({ name: r })),
     });
     const user = manager.create(User, {
@@ -45,7 +45,6 @@ export class UsersService {
     const ROLES = [
       UserRole.ADMIN,
       UserRole.ORGANIZATIONOWNER,
-      UserRole.EMPLOYEE,
       UserRole.PARENT,
       UserRole.TEACHER,
       UserRole.ENRICHER,
@@ -61,8 +60,8 @@ export class UsersService {
 
   async findUsersByRoles() {
     const users = await this.userRepo.find({ relations: ['enricher'] });
-    const employees = users.filter((user) =>
-      user.roles.some((r) => r.name === UserRole.EMPLOYEE),
+    const teachers = users.filter((user) =>
+      user.roles.some((r) => r.name === UserRole.TEACHER),
     );
     const organizationOwners = users.filter((user) =>
       user.roles.some((r) => r.name === UserRole.ORGANIZATIONOWNER),
@@ -71,7 +70,7 @@ export class UsersService {
       user.roles.some((r) => r.name === UserRole.ENRICHER),
     );
     return {
-      employees,
+      teachers,
       organizationOwners,
       enrichers,
     };

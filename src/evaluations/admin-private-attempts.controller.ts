@@ -1,9 +1,9 @@
 import { Controller, Param, ParseUUIDPipe, Post, Req } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
-import { Roles } from 'src/users/decorators/role.decorator';
 import { UserRole } from 'src/common/enums/role.enum';
 import { type AuthRequest } from 'src/common/interfaces/auth-request.interface';
-import { PrivateChildAttemptsService } from './private-child-attempts.service';
+import { Roles } from 'src/users/decorators/role.decorator';
+import { EvaluationSlotService } from './services/evaluation-slot.service';
 
 type JwtRequestUser = {
   userId: string;
@@ -14,7 +14,7 @@ type JwtRequestUser = {
 @ApiBearerAuth()
 @Controller('admin/attempts')
 export class AdminPrivateAttemptsController {
-  constructor(private readonly privateAttempts: PrivateChildAttemptsService) {}
+  constructor(private readonly slots: EvaluationSlotService) {}
 
   @Roles(UserRole.ADMIN)
   @Post(':id/approve')
@@ -27,6 +27,6 @@ export class AdminPrivateAttemptsController {
     @Req() req: AuthRequest,
   ) {
     const user = req.user as unknown as JwtRequestUser;
-    return this.privateAttempts.adminApproveExtraAttempt(id, user.userId);
+    return this.slots.adminApproveExtraAttempt(id, user.userId);
   }
 }

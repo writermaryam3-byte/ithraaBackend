@@ -21,7 +21,7 @@ export class DealsController {
   constructor(private readonly dealsService: DealsService) {}
 
   @Post()
-  @Roles(UserRole.ORGANIZATIONOWNER, UserRole.EMPLOYEE, UserRole.TEACHER)
+  @Roles(UserRole.ORGANIZATIONOWNER, UserRole.TEACHER)
   @ApiOperation({ summary: 'Create a new deal' })
   createDeal(@Body() dto: CreateDealDto, @Req() req: AuthRequest) {
     return this.dealsService.createDeal(dto, req.user);

@@ -2,9 +2,7 @@ import {
   BadRequestException,
   Body,
   Controller,
-  forwardRef,
   Headers,
-  Inject,
   Param,
   ParseUUIDPipe,
   Post,
@@ -25,15 +23,14 @@ import { type AuthRequest } from 'src/common/interfaces/auth-request.interface';
 import { PaymentsService } from './payments.service';
 import { CreatePaymentDto } from './dto/create-payment.dto';
 import { RetryPaymentDto } from './dto/retry-payment.dto';
-import { PrivateChildAttemptsService } from 'src/children/private-child-attempts.service';
+import { EvaluationSlotService } from 'src/evaluations/services/evaluation-slot.service';
 
 @ApiTags('payments')
 @Controller('payments')
 export class PaymentsController {
   constructor(
     private readonly payments: PaymentsService,
-    @Inject(forwardRef(() => PrivateChildAttemptsService))
-    private readonly privateChildAttempts: PrivateChildAttemptsService,
+    private readonly slots: EvaluationSlotService,
   ) {}
 
   @Post()
@@ -78,7 +75,7 @@ export class PaymentsController {
     @Param('attemptId', new ParseUUIDPipe()) attemptId: string,
     @Req() req: AuthRequest,
   ) {
-    return this.privateChildAttempts.initiateOrRefreshExtraPayment(
+    return this.slots.initiateOrRefreshExtraPayment(
       attemptId,
       req.user.userId,
     );

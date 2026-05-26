@@ -379,7 +379,7 @@ export class OwnerEvaluationResultsService {
     const child = await this.childRepo.findOne({
       where: {
         id: childId,
-        organization: { id: organizationId },
+        class: { organization: { id: organizationId } },
       },
       relations: {
         parent: true,

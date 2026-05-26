@@ -1,6 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { Resend } from 'resend';
-import { MailerService } from 'src/mailer/mailer.service';
 import { AuthProvider } from 'src/users/services/auth.provider';
 
 function escapeHtml(text: string): string {
@@ -17,10 +16,7 @@ export class EmailProvider {
   private readonly logger = new Logger(EmailProvider.name);
   private resend = new Resend(process.env.RESEND_API_KEY);
 
-  constructor(
-    private readonly mailer: MailerService,
-    private readonly authService: AuthProvider,
-  ) {}
+  constructor(private readonly authService: AuthProvider) {}
 
   async mail(to: string, subject: string, html: string) {
     try {

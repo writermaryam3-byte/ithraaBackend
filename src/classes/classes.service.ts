@@ -99,12 +99,15 @@ export class ClassesService {
         teacherName: cls.teacher?.user.name,
         organizationName: cls.grade.organization.organizationName,
         organizationId: cls.grade.organization.id,
-        children: cls.children.length,
+        children: cls.children,
       })),
     };
   }
   async findOneOrFail(id: string) {
-    const cls = await this.classesRepo.findOneBy({ id });
+    const cls = await this.classesRepo.findOne({
+      where: { id },
+      relations: { organization: true },
+    });
     if (!cls) throw new NotFoundException(`class with ID ${id} not found`);
     return cls;
   }

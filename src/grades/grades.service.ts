@@ -34,7 +34,6 @@ export class GradesService {
     const grades = await this.gradeRepo.find({
       relations: { organization: true },
     });
-    console.log(grades);
     return grades.map((g) => ({
       id: g.id,
       name: g.name,
@@ -101,17 +100,29 @@ export class GradesService {
       }),
     };
   }
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  update(id: number, updateGradeDto: UpdateGradeDto) {
-    return `This action updates a #${id} grade`;
+  async update(id: string, updateGradeDto: UpdateGradeDto) {
+    const grade = await this.findOneOrFail(id);
+
+    if (updateGradeDto.name !== undefined) {
+      grade.name = updateGradeDto.name;
+    }
+
+    if (updateGradeDto.organizationId !== undefined) {
+      const org = await this.organizationsService.findOneOrFail(
+        updateGradeDto.organizationId,
+      );
+      grade.organization = org;
+      grade.organizationId = org.id;
+    }
+
+    return this.gradeRepo.save(grade);
   }
 
-  async remove(id: string): Promise<void> {
+  async remove(id: string) {
     const result = await this.gradeRepo.delete(id);
-    // eslint-disable-next-line prettier/prettier
-  
     if (result.affected === 0) {
       throw new NotFoundException('Grade not found');
     }
+    return { message: 'Deleted successfully' };
   }
 }

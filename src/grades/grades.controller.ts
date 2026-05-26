@@ -36,12 +36,6 @@ export class GradesController {
     return this.gradesService.findAll();
   }
 
-  @ApiOperation({ summary: 'get one grade' })
-  @Get(':id')
-  findOne(@Param('id', new ParseUUIDPipe()) id: string) {
-    return this.gradesService.findOne(id);
-  }
-
   @Roles(UserRole.ORGANIZATIONOWNER, UserRole.ADMIN, UserRole.TEACHER)
   @Get('organization/:orgId')
   @ApiOperation({ summary: 'Get all grades for a specific org' })
@@ -52,12 +46,18 @@ export class GradesController {
     return this.gradesService.findAllByOrganization(orgId, req.user);
   }
 
+  @ApiOperation({ summary: 'get one grade' })
+  @Get(':id')
+  findOne(@Param('id', new ParseUUIDPipe()) id: string) {
+    return this.gradesService.findOne(id);
+  }
+
   @Patch(':id')
   update(
     @Param('id', new ParseUUIDPipe()) id: string,
     @Body() updateGradeDto: UpdateGradeDto,
   ) {
-    return this.gradesService.update(+id, updateGradeDto);
+    return this.gradesService.update(id, updateGradeDto);
   }
 
   @Delete(':id')

@@ -1,5 +1,4 @@
 import { Gender } from 'src/common/enums/gender.enum';
-import { Organization } from 'src/organizations/entities/organization.entity';
 import { User } from 'src/users/entities/user.entity';
 import {
   Entity,
@@ -11,10 +10,12 @@ import {
   CreateDateColumn,
   UpdateDateColumn,
   JoinColumn,
+  Index,
 } from 'typeorm';
 import { ChildProfile } from './child-profile.entity';
 import { Class } from 'src/classes/entities/class.entity';
-import { ChildPrivateAttempt } from './child-private-attempt.entity';
+import { EvaluationSlot } from 'src/evaluations/entities/evaluation-slot.entity';
+import { Organization } from 'src/organizations/entities/organization.entity';
 
 @Entity('children')
 export class Child {
@@ -30,9 +31,9 @@ export class Child {
   @Column({ type: 'enum', enum: Gender })
   gender: Gender;
 
-  @ManyToOne(() => Organization, { nullable: true, onDelete: 'CASCADE' })
-  @JoinColumn({ name: 'organizationId' })
-  organization: Organization | null;
+  @Index()
+  @Column({ type: 'uuid', nullable: true })
+  classId: string | null;
 
   @ManyToOne(() => Class, (cls) => cls.children, {
     nullable: true,
@@ -41,25 +42,37 @@ export class Child {
   @JoinColumn({ name: 'classId' })
   class: Class | null;
 
-  @ManyToOne(() => User, (user) => user.children, { onDelete: 'CASCADE' })
-  @JoinColumn({ name: 'userId' })
-  user: User;
+  @Index()
+  @Column({ type: 'uuid', nullable: true })
+  organizationId: string | null;
+
+  @ManyToOne(() => Organization, { nullable: true, onDelete: 'CASCADE' })
+  @JoinColumn({ name: 'organizationId' })
+  organization: Organization | null;
+
+  @Index()
+  @Column({ type: 'uuid' })
+  createdById: string;
 
   @ManyToOne(() => User, (user) => user.children, { onDelete: 'CASCADE' })
+  @JoinColumn({ name: 'createdById' })
+  createdBy: User;
+
+  @Index()
+  @Column({ type: 'uuid' })
+  parentId: string;
+
+  @ManyToOne(() => User, (user) => user.parentChildren, {
+    onDelete: 'CASCADE',
+  })
   @JoinColumn({ name: 'parentId' })
   parent: User;
 
   @OneToOne(() => ChildProfile, (profile) => profile.child)
   profile: ChildProfile;
 
-  @Column({ type: 'int', default: 0 })
-  attemptsUsed: number;
-
-  @Column({ default: false })
-  retakeUsed: boolean;
-
-  @OneToMany(() => ChildPrivateAttempt, (a) => a.child)
-  privateAttempts: ChildPrivateAttempt[];
+  @OneToMany(() => EvaluationSlot, (a) => a.child)
+  slots: EvaluationSlot[];
 
   @CreateDateColumn()
   createdAt: Date;

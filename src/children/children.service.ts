@@ -8,7 +8,10 @@ import {
   NotFoundException,
   UnauthorizedException,
 } from '@nestjs/common';
-import { CreateChildWithParentDto } from './dto/create-child.dto';
+import {
+  CreateChildDto,
+  CreateChildWithParentDto,
+} from './dto/create-child.dto';
 import { CreateChildByParentDto } from './dto/create-child-by-parent.dto';
 import { UpdateChildDto } from './dto/update-child.dto';
 import { Child } from './entities/child.entity';
@@ -16,12 +19,22 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { DataSource, IsNull, Repository } from 'typeorm';
 import { OrganizationsService } from 'src/organizations/organizations.service';
 import { UsersService } from 'src/users/services/users.service';
-import { AuthProvider } from 'src/users/services/auth.provider';
 import { UserRole } from 'src/common/enums/role.enum';
 import { NotificationsService } from 'src/notifications/notifications.service';
 import { NotificationDelivery } from 'src/notifications/enums/notification-delivery.enum';
 import { JwtRequestUser } from 'src/common/interfaces/jwt-request-user.interface';
 import { ClassesService } from 'src/classes/classes.service';
+import { AttemptUsageService } from 'src/evaluations/attempt-usage.service';
+import { User } from 'src/users/entities/user.entity';
+import { TransferService } from './transfer.service';
+import { randomUUID } from 'crypto';
+
+export type CreateChildResponse = {
+  status: 'CREATED' | 'TRANSFER_REQUIRED';
+  message: string;
+  childId?: string;
+  transferRequestId?: string;
+};
 
 @Injectable()
 export class ChildrenService {
@@ -33,9 +46,15 @@ export class ChildrenService {
     private clsService: ClassesService,
     private organizationsService: OrganizationsService,
     private dataSource: DataSource,
-    private authService: AuthProvider,
     private notificationsService: NotificationsService,
+    private attemptUsageservice: AttemptUsageService,
+    private transferService: TransferService,
   ) {}
+
+  async isPrivateChild(id: string) {
+    const child = await this.findOneOrFail(id);
+    return child.classId === null;
+  }
 
   async createChildByParent(parentId: string, dto: CreateChildByParentDto) {
     const user = await this.usersService.findById(parentId);
@@ -47,7 +66,7 @@ export class ChildrenService {
     }
 
     const privateChildCount = await this.childrenRepository.count({
-      where: { parent: { id: parentId }, organization: IsNull() },
+      where: { parent: { id: parentId }, classId: IsNull() },
     });
     if (privateChildCount >= 2) {
       await this.notificationsService.enqueue({
@@ -64,11 +83,8 @@ export class ChildrenService {
       name: dto.name,
       birthDate: dto.birthDate,
       gender: dto.gender,
-      organization: null,
-      user: { id: parentId },
+      createdBy: { id: parentId },
       parent: { id: parentId },
-      attemptsUsed: 0,
-      retakeUsed: false,
     });
 
     return child;
@@ -76,10 +92,28 @@ export class ChildrenService {
 
   async findPrivateChildrenForParent(parentId: string) {
     const [children, count] = await this.childrenRepository.findAndCount({
-      where: { parent: { id: parentId }, organization: IsNull() },
+      where: { parent: { id: parentId }, classId: IsNull() },
       order: { createdAt: 'DESC' },
     });
-    return { children, count };
+
+    return {
+      children: await Promise.all(
+        children.map(async (child) => {
+          const usage = await this.attemptUsageservice.getUsage(
+            child.id,
+            parentId,
+            this.dataSource.manager,
+          );
+
+          return {
+            ...child,
+            retakeUsed: usage.hasRetake,
+            attemptsUsed: usage.totalAttempts,
+          };
+        }),
+      ),
+      count,
+    };
   }
 
   async findOrgChildrenForParent(parentId: string) {
@@ -87,122 +121,176 @@ export class ChildrenService {
     const [children, count] = await this.childrenRepository.findAndCount({
       where: {
         parent: { id: parentId },
-        organization: { id: organization.id },
+        class: { organization: { id: organization.id } },
       },
       order: { createdAt: 'DESC' },
     });
 
-    return { children, count };
+    return {
+      children: await Promise.all(
+        children.map(async (child) => {
+          const usage = await this.attemptUsageservice.getUsage(
+            child.id,
+            parentId,
+            this.dataSource.manager,
+          );
+
+          return {
+            ...child,
+            retakeUsed: usage.hasRetake,
+            attemptsUsed: usage.totalAttempts,
+          };
+        }),
+      ),
+      count,
+    };
+  }
+
+  async createChild(
+    dto: CreateChildDto,
+    currentUser: JwtRequestUser,
+  ): Promise<CreateChildResponse> {
+    return this.dataSource.transaction(async (manager) => {
+      const cls = await this.clsService.findOneOrFail(dto.classId);
+      const currentOrganizationId = cls.organization.id;
+      if (
+        !(await this.organizationsService.isOrgMember(
+          currentUser.userId,
+          currentOrganizationId,
+        ))
+      ) {
+        throw new ForbiddenException(
+          'You are not allowed to add children to this class',
+        );
+      }
+
+      await this.usersService.findById(currentUser.userId);
+
+      const userRepo = manager.getRepository(User);
+      const parentEmail = dto.parentEmail?.toLowerCase().trim();
+      const parentMatches = await userRepo.find({
+        where: [
+          { phone: dto.parentPhone },
+          ...(parentEmail ? [{ email: parentEmail }] : []),
+        ],
+        relations: ['roles'],
+      });
+      const parentIds = new Set(parentMatches.map((user) => user.id));
+      if (parentIds.size > 1) {
+        throw new ConflictException(
+          'The provided phone and email belong to different accounts',
+        );
+      }
+
+      let parent = parentMatches[0];
+      if (parent) {
+        if (!parent.roles?.some((role) => role.name === UserRole.PARENT)) {
+          parent = await this.usersService.addRolesToUser(
+            parent.id,
+            [UserRole.PARENT],
+            manager,
+          );
+        }
+
+        const parentPatch: Partial<User> = {};
+        if (dto.parentName) parentPatch.name = dto.parentName;
+        if (parentEmail) parentPatch.email = parentEmail;
+        parentPatch.phone = dto.parentPhone;
+
+        if (Object.keys(parentPatch).length > 0) {
+          parent = await this.usersService.updateUser(
+            parent.id,
+            parentPatch,
+            manager,
+          );
+        }
+      } else {
+        if (!dto.parentName) {
+          throw new ConflictException(
+            'parentName is required when creating a new parent',
+          );
+        }
+        parent = await this.usersService.create(
+          {
+            name: dto.parentName,
+            email:
+              parentEmail ?? this.createPlaceholderParentEmail(dto.parentPhone),
+            phone: dto.parentPhone,
+            password: this.createTemporaryPassword(),
+          },
+          [UserRole.PARENT],
+          manager,
+        );
+      }
+
+      const childRepo = manager.getRepository(Child);
+      const existingChild = await childRepo.findOne({
+        where: {
+          birthDate: dto.birthDate,
+          parentId: parent.id,
+        },
+      });
+
+      if (existingChild) {
+        if (existingChild.organizationId === currentOrganizationId) {
+          throw new ConflictException('Child already exists in your school');
+        }
+
+        const transfer = await this.transferService.requestTransfer(
+          existingChild.id,
+          currentOrganizationId,
+          manager,
+        );
+
+        return {
+          status: 'TRANSFER_REQUIRED',
+          message:
+            'Child already exists in another school. Transfer requested.',
+          childId: existingChild.id,
+          transferRequestId: transfer.id,
+        };
+      }
+
+      const child = await childRepo.save({
+        name: dto.name,
+        birthDate: dto.birthDate,
+        gender: dto.gender,
+        classId: dto.classId,
+        organizationId: currentOrganizationId,
+        createdBy: { id: currentUser.userId },
+        parent: { id: parent.id },
+      });
+
+      return {
+        status: 'CREATED',
+        message: 'Child created successfully',
+        childId: child.id,
+      };
+    });
   }
 
   async create(
     createChildWithParentDto: CreateChildWithParentDto,
     currentUser: JwtRequestUser,
   ) {
-    return this.dataSource.transaction(async (manager) => {
-      // check organization
-      if (
-        createChildWithParentDto.child.organizationId &&
-        createChildWithParentDto.child.classId
-      ) {
-        await this.organizationsService.findOneOrFail(
-          createChildWithParentDto.child.organizationId,
-        );
-        if (
-          !(await this.clsService.isOrgCls(
-            createChildWithParentDto.child.classId,
-            createChildWithParentDto.child.organizationId,
-          ))
-        ) {
-          throw new NotFoundException(
-            `This class with id ${createChildWithParentDto.child.classId} is not found in organization with id ${createChildWithParentDto.child.organizationId}`,
-          );
-        }
-      }
+    return this.createChild(
+      {
+        ...createChildWithParentDto.child,
+        parentName: createChildWithParentDto.parent.name,
+        parentEmail: createChildWithParentDto.parent.email,
+        parentPhone: createChildWithParentDto.parent.phone,
+      },
+      currentUser,
+    );
+  }
 
-      // check user (creator)
-      await this.usersService.findById(currentUser.userId);
+  private createTemporaryPassword() {
+    return `Temp-${randomUUID()}aA1!`;
+  }
 
-      const parentDto = createChildWithParentDto.parent;
-      const parentAlreadyExists = await this.authService.isAlreadyExits(
-        parentDto.phone,
-        parentDto.email,
-      );
-
-      let parent: { id: string };
-
-      if (parentAlreadyExists) {
-        const byPhone = await this.usersService.findByPhone(parentDto.phone);
-        const byEmail = await this.usersService.findByEmail(
-          parentDto.email.toLowerCase().trim(),
-        );
-        if (byPhone && byEmail && byPhone.id !== byEmail.id) {
-          throw new ConflictException(
-            'The provided phone and email belong to different accounts',
-          );
-        }
-        const existing = byPhone ?? byEmail;
-        if (!existing) {
-          throw new ConflictException(
-            'User exists but could not be loaded. Try again.',
-          );
-        }
-
-        if (!existing.roles?.some((r) => r.name === UserRole.PARENT)) {
-          await this.usersService.addRolesToUser(
-            existing.id,
-            [UserRole.PARENT],
-            manager,
-          );
-        }
-
-        const updated = await this.usersService.updateUser(
-          existing.id,
-          {
-            name: parentDto.name,
-            email: parentDto.email,
-            phone: parentDto.phone,
-            password: parentDto.password,
-          },
-          manager,
-        );
-        parent = { id: updated.id };
-      } else {
-        const created = await this.usersService.create(
-          {
-            name: parentDto.name,
-            email: parentDto.email,
-            phone: parentDto.phone,
-            password: parentDto.password,
-          },
-          [UserRole.PARENT],
-          manager,
-        );
-        parent = { id: created.id };
-      }
-
-      // create child
-      const child = await manager.getRepository(Child).save({
-        name: createChildWithParentDto.child.name,
-        birthDate: createChildWithParentDto.child.birthDate,
-        gender: createChildWithParentDto.child.gender,
-        organization: createChildWithParentDto.child.organizationId
-          ? { id: createChildWithParentDto.child.organizationId }
-          : null,
-
-        class: createChildWithParentDto.child.classId
-          ? { id: createChildWithParentDto.child.classId }
-          : null,
-
-        user: { id: currentUser.userId },
-        parent: { id: parent.id },
-      });
-
-      return {
-        message: 'child created successfully with parent',
-        child,
-      };
-    });
+  private createPlaceholderParentEmail(phone: string) {
+    const normalizedPhone = phone.replace(/\D/g, '');
+    return `parent-${normalizedPhone}-${randomUUID()}@placeholder.ithraa.local`;
   }
 
   async findAll() {
@@ -212,8 +300,6 @@ export class ChildrenService {
   }
 
   async findAllByOrganization(orgId: string, currentUser: JwtRequestUser) {
-    const organization = await this.organizationsService.findOneOrFail(orgId);
-
     if (
       !(await this.organizationsService.isOrgMember(currentUser.userId, orgId))
     ) {
@@ -223,34 +309,24 @@ export class ChildrenService {
     }
 
     const children = await this.childrenRepository.find({
-      where: { organization },
+      where: {
+        organizationId: orgId,
+      },
       relations: { class: { grade: true } },
     });
 
     return {
-      children: children.map((child) => {
-        const evaluationStatus =
-          child.attemptsUsed > 0 ? 'تم التقيم' : 'لم يتم التقيم';
-        const evaluationStatusClassName =
-          child.attemptsUsed > 0 ? 'text-emerald-600' : '';
-        return {
-          id: child.id,
-          name: child.name,
-          className: child?.class?.name ?? 'غير مرتبط بفصل',
-          imgSrc: '/avatar-placeholder.svg',
-          evaluationStatus,
-          evaluationStatusClassName,
-          birthDate: child.birthDate,
-          gender: child.gender,
-          grade: child.class?.grade.name,
-        };
-      }),
+      children: children.map((child) => ({
+        ...child,
+        gradeName: child.class?.grade.name,
+        className: child.class?.name,
+      })),
     };
   }
 
   async findByUser(userId: string) {
     const [children, count] = await this.childrenRepository.findAndCount({
-      where: { user: { id: userId } },
+      where: { createdBy: { id: userId } },
     });
     return { children, count };
   }
@@ -258,14 +334,14 @@ export class ChildrenService {
   async findOne(id: string) {
     const child = await this.childrenRepository.findOne({
       where: { id },
-      relations: ['organization', 'class', 'parent'],
+      relations: { class: { organization: true }, parent: true },
     });
 
     if (!child) {
       throw new NotFoundException('child not found');
     }
 
-    return child;
+    return { child };
   }
 
   async findOneOrFail(id: string) {

@@ -2,39 +2,39 @@ import { forwardRef, Module } from '@nestjs/common';
 import { ChildrenService } from './children.service';
 import { ChildrenController } from './children.controller';
 import { ParentChildrenController } from './parent-children.controller';
-import { AdminPrivateAttemptsController } from './admin-private-attempts.controller';
-import { PrivateChildAttemptsService } from './private-child-attempts.service';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { Child } from './entities/child.entity';
 import { ChildProfile } from './entities/child-profile.entity';
 import { ChildReport } from './entities/child-report.entity';
-import { ChildPrivateAttempt } from './entities/child-private-attempt.entity';
+import { TransferRequest } from './entities/transfer-request.entity';
 import { OrganizationsModule } from 'src/organizations/organizations.module';
 import { UsersModule } from 'src/users/users.module';
 import { NotificationsModule } from 'src/notifications/notifications.module';
-import { PaymentsModule } from 'src/payments/payments.module';
 import { ClassesModule } from 'src/classes/classes.module';
+import { EvaluationsModule } from 'src/evaluations/evaluations.module';
+import { TransferService } from './transfer.service';
+import { TransfersController } from './transfers.controller';
 
 @Module({
   controllers: [
     ChildrenController,
     ParentChildrenController,
-    AdminPrivateAttemptsController,
+    TransfersController,
   ],
-  providers: [ChildrenService, PrivateChildAttemptsService],
+  providers: [ChildrenService, TransferService],
   imports: [
     TypeOrmModule.forFeature([
       Child,
       ChildProfile,
       ChildReport,
-      ChildPrivateAttempt,
+      TransferRequest,
     ]),
     OrganizationsModule,
     forwardRef(() => ClassesModule),
     UsersModule,
     NotificationsModule,
-    forwardRef(() => PaymentsModule),
+    EvaluationsModule,
   ],
-  exports: [TypeOrmModule, ChildrenService, PrivateChildAttemptsService],
+  exports: [TypeOrmModule, ChildrenService, TransferService],
 })
 export class ChildrenModule {}

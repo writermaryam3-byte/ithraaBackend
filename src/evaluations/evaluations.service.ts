@@ -1,77 +1,47 @@
 import {
   BadRequestException,
-  ConflictException,
   ForbiddenException,
   Injectable,
-  Logger,
   NotFoundException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { DataSource, In, Repository } from 'typeorm';
-import { EventEmitter2 } from 'eventemitter2';
-
-import { Evaluation } from './entities/evaluation.entity';
-import { EvaluationAttempt } from './entities/evaluation-attempt.entity';
-import { EvaluationAnswer } from './entities/evaluation-answer.entity';
-import { EvaluationApproval } from './entities/evaluation-approval.entity';
-import { EvaluationQuestion } from './entities/evaluation-question.entity';
-import { EvaluationQuestionAnswer } from './entities/evaluation-question-answer.entity';
-import { EvaluationDimension } from './entities/evaluation-dimension.entity';
-import { FindOptionsWhere } from 'typeorm';
+import { DataSource, FindOptionsWhere, Repository } from 'typeorm';
 import { Child } from 'src/children/entities/child.entity';
-import { EvaluationAttemptStatus } from './enums/evaluation-attempt-status.enum';
-import { EVALUATION_EVENTS } from './evaluations.events';
-import { StartEvaluationDto } from './dto/start-evaluation.dto';
-import { SaveProgressDto } from './dto/save-progress.dto';
-import { SubmitAttemptDto } from './dto/submit-attempt.dto';
 import { UserRole } from 'src/common/enums/role.enum';
 import { CreateEvaluationDto } from './dto/create-evaluation.dto';
-import { PrivateChildAttemptsService } from 'src/children/private-child-attempts.service';
-import { EvaluationScoringService } from './evaluations-scoring-services.service';
-import { EntityManager } from 'typeorm';
-type Actor = { userId: string; roles: UserRole[] };
-type AnswerInput = {
-  questionId: string;
-  selectedAnswerId: string;
-};
+import { SaveProgressDto } from './dto/save-progress.dto';
+import { StartEvaluationDto } from './dto/start-evaluation.dto';
+import { SubmitAttemptDto } from './dto/submit-attempt.dto';
+import { EvaluationAttempt } from './entities/evaluation-attempt.entity';
+import { EvaluationDimension } from './entities/evaluation-dimension.entity';
+import { EvaluationQuestionAnswer } from './entities/evaluation-question-answer.entity';
+import { EvaluationQuestion } from './entities/evaluation-question.entity';
+import { Evaluation } from './entities/evaluation.entity';
+import { EvaluationAttemptStatus } from './enums/evaluation-attempt-status.enum';
+import {
+  EvaluationAccessPolicy,
+  EvaluationActor,
+} from './services/evaluation-access-policy.service';
+import { EvaluationApprovalService } from './services/evaluation-approval.service';
+import { EvaluationAttemptLifecycleService } from './services/evaluation-attempt-lifecycle.service';
+import { EvaluationProgressService } from './services/evaluation-progress.service';
+import { EvaluationSubmissionService } from './services/evaluation-submission.service';
 
-type EvaluationAnswerRow = {
-  attemptId: string;
-  questionId: string;
-  selectedAnswerId: string;
-  evaluationDimensionId: string;
-  scoreValue: number;
-};
-type EvaluationSubmittedPayload = {
-  attemptId: string;
-  evaluationId: string;
-  parentId: string;
-  childId: string;
-  score: number | null;
-  result: Record<string, unknown> | null;
-  autoSubmitted: boolean;
-};
 @Injectable()
 export class EvaluationsService {
-  private readonly logger = new Logger(EvaluationsService.name);
-
   constructor(
     private readonly dataSource: DataSource,
-    private readonly events: EventEmitter2,
-    private readonly privateChildAttempts: PrivateChildAttemptsService,
-    private readonly scoringService: EvaluationScoringService,
+    private readonly access: EvaluationAccessPolicy,
+    private readonly lifecycle: EvaluationAttemptLifecycleService,
+    private readonly progress: EvaluationProgressService,
+    private readonly submissions: EvaluationSubmissionService,
+    private readonly approvals: EvaluationApprovalService,
 
     @InjectRepository(Evaluation)
     private readonly evalRepo: Repository<Evaluation>,
 
     @InjectRepository(EvaluationAttempt)
     private readonly attemptRepo: Repository<EvaluationAttempt>,
-
-    @InjectRepository(EvaluationAnswer)
-    private readonly answerRepo: Repository<EvaluationAnswer>,
-
-    @InjectRepository(EvaluationApproval)
-    private readonly approvalRepo: Repository<EvaluationApproval>,
 
     @InjectRepository(EvaluationQuestion)
     private readonly questionRepo: Repository<EvaluationQuestion>,
@@ -86,8 +56,8 @@ export class EvaluationsService {
     private readonly childRepo: Repository<Child>,
   ) {}
 
-  async createEvaluation(dto: CreateEvaluationDto, actor: Actor) {
-    this.assertHasRole(actor, [UserRole.ADMIN]);
+  async createEvaluation(dto: CreateEvaluationDto, actor: EvaluationActor) {
+    this.access.assertHasRole(actor, [UserRole.ADMIN]);
 
     return this.dataSource.transaction(async (manager) => {
       const evaluationRepo = manager.getRepository(Evaluation);
@@ -95,7 +65,7 @@ export class EvaluationsService {
       const questionRepo = manager.getRepository(EvaluationQuestion);
 
       const duplicatedCodes = this.findDuplicates(
-        dto.dimensions.map((d) => d.code),
+        dto.dimensions.map((dimension) => dimension.code),
       );
       if (duplicatedCodes.length > 0) {
         throw new BadRequestException(
@@ -127,7 +97,9 @@ export class EvaluationsService {
         ),
       );
 
-      const dimensionByCode = new Map(dimensions.map((d) => [d.code, d]));
+      const dimensionByCode = new Map(
+        dimensions.map((dimension) => [dimension.code, dimension]),
+      );
 
       for (const [index, questionDto] of dto.questions.entries()) {
         const dimension = dimensionByCode.get(questionDto.dimensionCode);
@@ -175,8 +147,8 @@ export class EvaluationsService {
     });
   }
 
-  async getAllEvaluationsForAdmin(actor: Actor) {
-    this.assertHasRole(actor, [UserRole.ADMIN]);
+  async getAllEvaluationsForAdmin(actor: EvaluationActor) {
+    this.access.assertHasRole(actor, [UserRole.ADMIN]);
 
     return this.evalRepo.find({
       relations: {
@@ -186,8 +158,11 @@ export class EvaluationsService {
     });
   }
 
-  async getEvaluationDetailsForAdmin(evaluationId: string, actor: Actor) {
-    this.assertHasRole(actor, [UserRole.ADMIN]);
+  async getEvaluationDetailsForAdmin(
+    evaluationId: string,
+    actor: EvaluationActor,
+  ) {
+    this.access.assertHasRole(actor, [UserRole.ADMIN]);
 
     const evaluation = await this.evalRepo.findOne({
       where: { id: evaluationId },
@@ -215,14 +190,8 @@ export class EvaluationsService {
     return evaluation;
   }
 
-  async getEvaluationForm(evaluationId: string, actor: Actor) {
-    const allowed =
-      actor.roles.includes(UserRole.PARENT) ||
-      actor.roles.includes(UserRole.ADMIN);
-
-    if (!allowed) {
-      throw new ForbiddenException('Insufficient role');
-    }
+  async getEvaluationForm(evaluationId: string, actor: EvaluationActor) {
+    this.access.assertHasRole(actor, [UserRole.PARENT, UserRole.ADMIN]);
 
     const evaluation = await this.evalRepo.findOne({
       where: { id: evaluationId },
@@ -255,232 +224,39 @@ export class EvaluationsService {
       ageFrom: evaluation.ageFrom,
       ageTo: evaluation.ageTo,
       evaluatorTypes: evaluation.evaluatorTypes,
-      dimensions: evaluation.dimensions.map((d) => ({
-        id: d.id,
-        name: d.name,
-        code: d.code,
+      dimensions: evaluation.dimensions.map((dimension) => ({
+        id: dimension.id,
+        name: dimension.name,
+        code: dimension.code,
       })),
-      questions: evaluation.questions.map((q) => ({
-        id: q.id,
-        content: q.content,
-        order: q.order,
+      questions: evaluation.questions.map((question) => ({
+        id: question.id,
+        content: question.content,
+        order: question.order,
         dimension: {
-          id: q.evaluationDimension.id,
-          code: q.evaluationDimension.code,
-          name: q.evaluationDimension.name,
+          id: question.evaluationDimension.id,
+          code: question.evaluationDimension.code,
+          name: question.evaluationDimension.name,
         },
-        answers: q.answers.map((a) => ({
-          id: a.id,
-          text: a.text,
-          code: a.code,
-          order: a.order,
+        answers: question.answers.map((answer) => ({
+          id: answer.id,
+          text: answer.text,
+          code: answer.code,
+          order: answer.order,
         })),
       })),
     };
   }
 
-  private async buildAnswerRows(
-    manager: EntityManager,
-    attempt: EvaluationAttempt,
-    inputs: AnswerInput[],
-  ): Promise<EvaluationAnswerRow[]> {
-    if (!inputs.length) return [];
-
-    const questionIds = inputs.map((a) => a.questionId);
-
-    const duplicatedQuestionIds = this.findDuplicates(questionIds);
-
-    if (duplicatedQuestionIds.length > 0) {
-      throw new BadRequestException(
-        `Duplicate answers for questions: ${duplicatedQuestionIds.join(', ')}`,
-      );
-    }
-
-    const questions = await manager.getRepository(EvaluationQuestion).find({
-      where: {
-        id: In(questionIds),
-        evaluationId: attempt.evaluationId,
-      },
-      relations: {
-        answers: true,
-        evaluationDimension: true,
-      },
-    });
-
-    const questionMap = new Map<string, EvaluationQuestion>(
-      questions.map((q) => [q.id, q]),
-    );
-
-    if (questionMap.size !== questionIds.length) {
-      throw new BadRequestException(
-        'One or more questions do not belong to this evaluation',
-      );
-    }
-
-    return inputs.map((input) => {
-      const question = questionMap.get(input.questionId);
-
-      if (!question) {
-        throw new BadRequestException('Invalid question');
-      }
-
-      const selected = question.answers.find(
-        (answer) => answer.id === input.selectedAnswerId,
-      );
-
-      if (!selected) {
-        throw new BadRequestException(
-          'Selected answer does not belong to question',
-        );
-      }
-
-      return {
-        attemptId: attempt.id,
-        questionId: question.id,
-        selectedAnswerId: selected.id,
-        evaluationDimensionId: question.evaluationDimensionId,
-        scoreValue: Number(selected.scoreValue),
-      };
-    });
-  }
-
-  async saveProgress(attemptId: string, dto: SaveProgressDto, actor: Actor) {
-    this.assertHasRole(actor, [UserRole.PARENT]);
-
-    const attempt = await this.getAttemptOrThrow(attemptId);
-    this.assertParentOwnership(attempt, actor);
-
-    await this.maybeAutoSubmitIfExpired(attempt, actor);
-
-    const freshAttempt = await this.getAttemptOrThrow(attemptId);
-
-    if (freshAttempt.status !== EvaluationAttemptStatus.IN_PROGRESS) {
-      throw new BadRequestException('Attempt is locked');
-    }
-
-    const answers = dto.answers ?? [];
-
-    if (answers.length === 0) {
-      return this.getAttempt(attemptId, actor);
-    }
-
-    await this.dataSource.transaction(async (manager) => {
-      const answerRepo = manager.getRepository(EvaluationAnswer);
-
-      const rows = await this.buildAnswerRows(manager, freshAttempt, answers);
-
-      await answerRepo.upsert(rows, ['attemptId', 'questionId']);
-    });
-
-    return this.getAttempt(attemptId, actor);
-  }
-
-  async submitAttempt(attemptId: string, dto: SubmitAttemptDto, actor: Actor) {
-    this.assertHasRole(actor, [UserRole.PARENT]);
-
-    return this.dataSource.transaction(async (manager) => {
-      const attemptRepo = manager.getRepository(EvaluationAttempt);
-      const answerRepo = manager.getRepository(EvaluationAnswer);
-      const evalRepo = manager.getRepository(Evaluation);
-
-      const attempt = await attemptRepo.findOne({
-        where: { id: attemptId },
-        lock: { mode: 'pessimistic_write' },
-      });
-
-      if (!attempt) throw new NotFoundException('Attempt not found');
-
-      this.assertParentOwnership(attempt, actor);
-
-      if (attempt.status !== EvaluationAttemptStatus.IN_PROGRESS) {
-        throw new BadRequestException('Attempt is locked');
-      }
-
-      const now = new Date();
-      const expired =
-        attempt.expiresAt instanceof Date &&
-        now.getTime() > attempt.expiresAt.getTime();
-
-      const rows = await this.buildAnswerRows(manager, attempt, dto.answers);
-
-      await answerRepo.upsert(rows, ['attemptId', 'questionId']);
-
-      const savedAnswers = await answerRepo.find({
-        where: { attemptId: attempt.id },
-        relations: {
-          evaluationDimension: true,
-          selectedAnswer: true,
-        },
-      });
-
-      const evaluation = await evalRepo.findOne({
-        where: { id: attempt.evaluationId },
-        relations: {
-          dimensions: true,
-        },
-      });
-
-      if (!evaluation) {
-        throw new NotFoundException('Evaluation not found');
-      }
-
-      const result = this.scoringService.calculate(evaluation, savedAnswers);
-
-      const totalScore =
-        'totalScore' in result && typeof result.totalScore === 'number'
-          ? result.totalScore
-          : null;
-      attempt.status = EvaluationAttemptStatus.SUBMITTED;
-      attempt.submittedAt = now;
-      attempt.score = totalScore;
-      attempt.result = result;
-
-      await attemptRepo.save(attempt);
-
-      const childRow = await manager.getRepository(Child).findOne({
-        where: { id: attempt.childId },
-        relations: { organization: true },
-      });
-
-      if (childRow?.organization == null) {
-        await this.privateChildAttempts.markPrivateAttemptCompleted(
-          manager,
-          attempt.id,
-          attempt.childId,
-          attempt.attemptNumber,
-        );
-      }
-
-      this.events.emit(EVALUATION_EVENTS.submitted, {
-        attemptId: attempt.id,
-        evaluationId: attempt.evaluationId,
-        parentId: attempt.parentId,
-        childId: attempt.childId,
-        score: totalScore,
-        result,
-        autoSubmitted: expired,
-      });
-
-      return attemptRepo.findOne({
-        where: { id: attempt.id },
-        relations: {
-          answers: {
-            selectedAnswer: true,
-            evaluationDimension: true,
-          },
-          approval: true,
-          evaluation: true,
-        },
-      });
-    });
-  }
-
-  async getAvailableEvaluationsForChild(childId: string, actor: Actor) {
-    this.assertHasRole(actor, [UserRole.PARENT]);
+  async getAvailableEvaluationsForChild(
+    childId: string,
+    actor: EvaluationActor,
+  ) {
+    this.access.assertHasRole(actor, [UserRole.PARENT]);
 
     const child = await this.childRepo.findOne({
       where: { id: childId, parent: { id: actor.userId } },
-      relations: { parent: true, organization: true },
+      relations: { parent: true, class: { organization: true } },
     });
 
     if (!child) {
@@ -498,9 +274,9 @@ export class EvaluationsService {
         age,
       });
 
-    if (child.organization) {
+    if (child.class) {
       qb.andWhere('evaluation.institutionId = :institutionId', {
-        institutionId: child.organization.id,
+        institutionId: child.class.organization.id,
       });
     }
 
@@ -513,210 +289,66 @@ export class EvaluationsService {
     };
   }
 
-  async startEvaluation(
+  startEvaluation(
     evaluationId: string,
     dto: StartEvaluationDto,
-    actor: Actor,
+    actor: EvaluationActor,
   ) {
-    this.assertHasRole(actor, [UserRole.PARENT]);
-
-    const evaluation = await this.evalRepo.findOne({
-      where: { id: evaluationId },
-    });
-
-    if (!evaluation) {
-      throw new NotFoundException('Evaluation not found');
-    }
-
-    const child = await this.childRepo.findOne({
-      where: { id: dto.childId, parent: { id: actor.userId } },
-      relations: { parent: true, organization: true },
-    });
-
-    if (!child) {
-      throw new ForbiddenException('Child not found for this parent');
-    }
-
-    const isPrivateChild = child.organization == null;
-
-    if (
-      !isPrivateChild &&
-      evaluation.institutionId !== child.organization?.id
-    ) {
-      throw new ForbiddenException(
-        'Evaluation does not belong to child institution',
-      );
-    }
-
-    const age = this.calculateAge(child.birthDate);
-
-    if (
-      (evaluation.ageFrom !== null &&
-        evaluation.ageFrom !== undefined &&
-        age < evaluation.ageFrom) ||
-      (evaluation.ageTo !== null &&
-        evaluation.ageTo !== undefined &&
-        age > evaluation.ageTo)
-    ) {
-      throw new ForbiddenException('Evaluation is not suitable for child age');
-    }
-
-    const expiresAt = this.resolveExpiresAt(dto);
-
-    return this.dataSource.transaction(async (manager) => {
-      const repo = manager.getRepository(EvaluationAttempt);
-
-      const attempts = await repo.find({
-        where: {
-          evaluationId,
-          parentId: actor.userId,
-          childId: dto.childId,
-        },
-        order: { attemptNumber: 'DESC' },
-        lock: { mode: 'pessimistic_write' },
-      });
-
-      const inProgress = attempts.some(
-        (a) => a.status === EvaluationAttemptStatus.IN_PROGRESS,
-      );
-
-      if (inProgress) {
-        throw new BadRequestException(
-          'Finish or submit the current attempt before starting another',
-        );
-      }
-
-      const count = attempts.length;
-      const last = attempts[0];
-
-      if (last?.status === EvaluationAttemptStatus.APPROVED) {
-        this.events.emit(EVALUATION_EVENTS.limitReached, {
-          evaluationId,
-          parentId: actor.userId,
-          childId: dto.childId,
-          attempts: count,
-          reason: 'already_approved',
-        });
-
-        throw new BadRequestException('Retake is not allowed after approval');
-      }
-
-      let entitlementId: string | null = null;
-
-      if (isPrivateChild) {
-        const nextNum = count + 1;
-
-        const entitlement =
-          await this.privateChildAttempts.findEntitlementForNext(
-            manager,
-            dto.childId,
-            actor.userId,
-            nextNum,
-          );
-
-        if (!entitlement) {
-          throw new BadRequestException(
-            'No evaluation slot is available. Open main slot, retake, request extra, complete payment, or wait for admin approval.',
-          );
-        }
-
-        entitlementId = entitlement.id;
-      } else if (count >= 2) {
-        this.events.emit(EVALUATION_EVENTS.limitReached, {
-          evaluationId,
-          parentId: actor.userId,
-          childId: dto.childId,
-          attempts: count,
-          reason: 'max_attempts',
-        });
-
-        throw new ConflictException('Maximum attempts reached');
-      }
-
-      const attemptNumber = count + 1;
-
-      const attempt = repo.create({
-        evaluationId,
-        parentId: actor.userId,
-        childId: dto.childId,
-        attemptNumber,
-        status: EvaluationAttemptStatus.IN_PROGRESS,
-        expiresAt,
-        score: null,
-        result: null,
-        submittedAt: null,
-      });
-
-      await repo.save(attempt);
-
-      if (isPrivateChild && entitlementId) {
-        await this.privateChildAttempts.linkEvaluationToEntitlement(
-          manager,
-          entitlementId,
-          attempt.id,
-        );
-      }
-
-      return attempt;
-    });
+    return this.lifecycle.startEvaluation(evaluationId, dto, actor);
   }
 
-  async approveAttempt(attemptId: string, actor: Actor) {
-    this.assertHasRole(actor, [UserRole.ADMIN]);
+  async saveProgress(
+    attemptId: string,
+    dto: SaveProgressDto,
+    actor: EvaluationActor,
+  ) {
+    await this.progress.saveProgress(attemptId, dto, actor);
+    return this.getAttempt(attemptId, actor);
+  }
 
-    return this.dataSource.transaction(async (manager) => {
-      const attemptRepo = manager.getRepository(EvaluationAttempt);
-      const approvalRepo = manager.getRepository(EvaluationApproval);
+  submitAttempt(
+    attemptId: string,
+    dto: SubmitAttemptDto,
+    actor: EvaluationActor,
+  ) {
+    return this.submissions.submitAttempt(attemptId, dto, actor);
+  }
 
-      const attempt = await attemptRepo.findOne({
+  approveAttempt(attemptId: string, actor: EvaluationActor) {
+    return this.approvals.approveAttempt(attemptId, actor);
+  }
+
+  async getAttempt(attemptId: string, actor: EvaluationActor) {
+    let attempt = await this.attemptRepo.findOne({
+      where: { id: attemptId },
+      relations: {
+        answers: {
+          selectedAnswer: true,
+          evaluationDimension: true,
+        },
+        approval: true,
+        evaluation: true,
+        child: {
+          class: {
+            organization: {
+              owner: true,
+            },
+            teacher: {
+              user: true,
+            },
+          },
+        },
+      },
+    });
+
+    if (!attempt) throw new NotFoundException('Attempt not found');
+
+    this.access.assertCanReadAttempt(attempt, actor);
+
+    if (actor.roles.includes(UserRole.PARENT)) {
+      await this.submissions.maybeAutoSubmitIfExpired(attemptId);
+      attempt = await this.attemptRepo.findOne({
         where: { id: attemptId },
-        lock: { mode: 'pessimistic_write' },
-      });
-
-      if (!attempt) {
-        throw new NotFoundException('Attempt not found');
-      }
-
-      if (attempt.status === EvaluationAttemptStatus.APPROVED) {
-        throw new ConflictException('Attempt already approved');
-      }
-
-      if (attempt.status !== EvaluationAttemptStatus.SUBMITTED) {
-        throw new BadRequestException(
-          'Only submitted attempts can be approved',
-        );
-      }
-
-      const existingApproval = await approvalRepo.findOne({
-        where: { attemptId: attempt.id },
-        lock: { mode: 'pessimistic_write' },
-      });
-
-      if (existingApproval) {
-        throw new ConflictException('Attempt already approved');
-      }
-
-      const approval = approvalRepo.create({
-        attemptId: attempt.id,
-        approvedBy: actor.userId,
-      });
-
-      await approvalRepo.save(approval);
-
-      attempt.status = EvaluationAttemptStatus.APPROVED;
-      await attemptRepo.save(attempt);
-
-      this.events.emit(EVALUATION_EVENTS.approved, {
-        attemptId: attempt.id,
-        evaluationId: attempt.evaluationId,
-        parentId: attempt.parentId,
-        childId: attempt.childId,
-        approvedBy: actor.userId,
-        approvedAt: approval.approvedAt,
-      });
-
-      return attemptRepo.findOne({
-        where: { id: attempt.id },
         relations: {
           answers: {
             selectedAnswer: true,
@@ -724,215 +356,34 @@ export class EvaluationsService {
           },
           approval: true,
           evaluation: true,
-          child: true,
+          child: {
+            class: {
+              organization: {
+                owner: true,
+              },
+              teacher: {
+                user: true,
+              },
+            },
+          },
         },
       });
-    });
-  }
-
-  private async getAttemptOrThrow(attemptId: string) {
-    const attempt = await this.attemptRepo.findOne({
-      where: { id: attemptId },
-      relations: {
-        answers: {
-          selectedAnswer: true,
-          evaluationDimension: true,
-        },
-        approval: true,
-        evaluation: true,
-        child: {
-          organization: true,
-          class: true,
-        },
-      },
-    });
-
-    if (!attempt) {
-      throw new NotFoundException('Attempt not found');
+      if (!attempt) throw new NotFoundException('Attempt not found');
+      this.access.assertCanReadAttempt(attempt, actor);
     }
 
-    return attempt;
-  }
-
-  private resolveExpiresAt(dto: StartEvaluationDto): Date | null {
-    if (dto.expiresAt && dto.expiresInSeconds) {
-      throw new BadRequestException(
-        'Provide either expiresAt or expiresInSeconds',
-      );
-    }
-
-    if (dto.expiresAt) {
-      const d = new Date(dto.expiresAt);
-
-      if (Number.isNaN(d.getTime())) {
-        throw new BadRequestException('Invalid expiresAt');
-      }
-
-      if (d.getTime() <= Date.now()) {
-        throw new BadRequestException('expiresAt must be in the future');
-      }
-
-      return d;
-    }
-
-    if (dto.expiresInSeconds) {
-      const ms = dto.expiresInSeconds * 1000;
-      return new Date(Date.now() + ms);
-    }
-
-    return null;
-  }
-
-  private assertHasRole(actor: Actor, allowed: UserRole[]) {
-    if (!actor.roles.some((r) => allowed.includes(r))) {
-      throw new ForbiddenException('Insufficient role');
-    }
-  }
-
-  private assertParentOwnership(attempt: EvaluationAttempt, actor: Actor) {
-    if (attempt.parentId !== actor.userId) {
-      throw new ForbiddenException('Attempt not owned by this parent');
-    }
-  }
-
-  private async maybeAutoSubmitIfExpired(
-    attempt: EvaluationAttempt,
-    actor: Actor,
-  ) {
-    void actor;
-
-    if (attempt.status !== EvaluationAttemptStatus.IN_PROGRESS) return;
-    if (!attempt.expiresAt) return;
-
-    const now = new Date();
-
-    if (now.getTime() <= attempt.expiresAt.getTime()) return;
-
-    this.logger.warn(`Auto-submitting expired attempt ${attempt.id}`);
-
-    let eventPayload: EvaluationSubmittedPayload | null = null;
-
-    await this.dataSource.transaction(async (manager) => {
-      const attemptRepo = manager.getRepository(EvaluationAttempt);
-      const answerRepo = manager.getRepository(EvaluationAnswer);
-      const evalRepo = manager.getRepository(Evaluation);
-
-      const locked = await attemptRepo.findOne({
-        where: { id: attempt.id },
-        lock: { mode: 'pessimistic_write' },
-      });
-
-      if (!locked) return;
-      if (locked.status !== EvaluationAttemptStatus.IN_PROGRESS) return;
-
-      const savedAnswers = await answerRepo.find({
-        where: { attemptId: locked.id },
-        relations: {
-          evaluationDimension: true,
-          selectedAnswer: true,
-        },
-      });
-
-      const evaluation = await evalRepo.findOne({
-        where: { id: locked.evaluationId },
-        relations: {
-          dimensions: true,
-        },
-      });
-
-      if (!evaluation) return;
-
-      const result = this.scoringService.calculate(evaluation, savedAnswers);
-
-      const totalScore =
-        'totalScore' in result && typeof result.totalScore === 'number'
-          ? result.totalScore
-          : null;
-
-      locked.status = EvaluationAttemptStatus.SUBMITTED;
-      locked.submittedAt = now;
-      locked.score = totalScore;
-      locked.result = result;
-
-      await attemptRepo.save(locked);
-
-      const childRow = await manager.getRepository(Child).findOne({
-        where: { id: locked.childId },
-        relations: { organization: true },
-      });
-
-      if (childRow?.organization == null) {
-        await this.privateChildAttempts.markPrivateAttemptCompleted(
-          manager,
-          locked.id,
-          locked.childId,
-          locked.attemptNumber,
-        );
-      }
-
-      eventPayload = {
-        attemptId: locked.id,
-        evaluationId: locked.evaluationId,
-        parentId: locked.parentId,
-        childId: locked.childId,
-        score: locked.score,
-        result: locked.result as Record<string, unknown> | null,
-        autoSubmitted: true,
-      };
-    });
-
-    if (!eventPayload) return;
-
-    this.events.emit(EVALUATION_EVENTS.submitted, eventPayload);
-  }
-
-  async getAttempt(attemptId: string, actor: Actor) {
-    const attempt = await this.attemptRepo.findOne({
-      where: { id: attemptId },
-      relations: {
-        answers: {
-          selectedAnswer: true,
-          evaluationDimension: true,
-        },
-        approval: true,
-        evaluation: true,
-        child: {
-          organization: true,
-          class: true,
-        },
-      },
-    });
-
-    if (!attempt) throw new NotFoundException('Attempt not found');
-
-    const isAdmin = actor.roles.includes(UserRole.ADMIN);
-    const isParent = actor.roles.includes(UserRole.PARENT);
-
-    if (isAdmin) return attempt;
-
-    if (isParent) {
-      this.assertParentOwnership(attempt, actor);
-      await this.maybeAutoSubmitIfExpired(attempt, actor);
-      return this.getAttemptOrThrow(attemptId);
-    }
-
-    if (attempt.status !== EvaluationAttemptStatus.APPROVED) {
-      throw new ForbiddenException('Attempt not accessible');
-    }
-
-    // TODO: tighten organization/class scoping for owner/teacher/employee.
     return attempt;
   }
 
   async getAttemptsForAdmin(
-    actor: Actor,
+    actor: EvaluationActor,
     filters: {
       status?: EvaluationAttemptStatus;
       evaluationId?: string;
       childId?: string;
     },
   ) {
-    this.assertHasRole(actor, [UserRole.ADMIN]);
+    this.access.assertHasRole(actor, [UserRole.ADMIN]);
 
     const where: FindOptionsWhere<EvaluationAttempt> = {};
 
@@ -956,7 +407,7 @@ export class EvaluationsService {
     return { attempts, count };
   }
 
-  async getAttemptsForChild(childId: string, actor: Actor) {
+  async getAttemptsForChild(childId: string, actor: EvaluationActor) {
     const isAdmin = actor.roles.includes(UserRole.ADMIN);
     const isParent = actor.roles.includes(UserRole.PARENT);
 
