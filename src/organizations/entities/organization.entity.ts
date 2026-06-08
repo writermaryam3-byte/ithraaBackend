@@ -11,6 +11,7 @@ import {
   OneToMany,
   OneToOne,
   JoinColumn,
+  ManyToOne,
 } from 'typeorm';
 
 @Entity('organizations')
@@ -36,6 +37,29 @@ export class Organization {
 
   @Column({ unique: true })
   ownerId: string;
+
+  @Column({ type: 'uuid', nullable: true })
+  approvedById: string | null;
+
+  @ManyToOne(() => User, { nullable: true, onDelete: 'SET NULL' })
+  @JoinColumn({ name: 'approvedById' })
+  approvedBy: User | null;
+
+  @Column({ type: 'timestamptz', nullable: true })
+  approvedAt: Date | null;
+
+  @Column({ type: 'uuid', nullable: true })
+  rejectedById: string | null;
+
+  @ManyToOne(() => User, { nullable: true, onDelete: 'SET NULL' })
+  @JoinColumn({ name: 'rejectedById' })
+  rejectedBy: User | null;
+
+  @Column({ type: 'timestamptz', nullable: true })
+  rejectedAt: Date | null;
+
+  @Column({ type: 'varchar', length: 500, nullable: true })
+  rejectionReason: string | null;
 
   /**
    * Organization owner

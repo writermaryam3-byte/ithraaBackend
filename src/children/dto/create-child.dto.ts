@@ -10,6 +10,7 @@ import {
   Length,
 } from 'class-validator';
 import { Gender } from 'src/common/enums/gender.enum';
+import { IsValidBirthDate } from 'src/common/validators/birth-date.validator';
 import { BaseSignupDto } from 'src/users/dto/base-signup.dto';
 import { Transform, Type } from 'class-transformer';
 import { ValidateNested } from 'class-validator';
@@ -27,6 +28,7 @@ export class CreateChildDto {
     format: 'date',
   })
   @IsDateString()
+  @IsValidBirthDate()
   birthDate: Date;
 
   @ApiProperty({

@@ -2,6 +2,7 @@ import {
   Injectable,
   NotFoundException,
   UnauthorizedException,
+  ForbiddenException,
 } from '@nestjs/common';
 import { CreateGradeDto } from './dto/create-grade.dto';
 import { UpdateGradeDto } from './dto/update-grade.dto';
@@ -19,13 +20,25 @@ export class GradesService {
     private readonly gradeRepo: Repository<Grade>,
     private readonly organizationsService: OrganizationsService,
   ) {}
-  async create(createGradeDto: CreateGradeDto) {
-    const org = this.organizationsService.findOneOrFail(
+  async create(createGradeDto: CreateGradeDto, currentUser: JwtRequestUser) {
+    const org = await this.organizationsService.findOneOrFail(
       createGradeDto.organizationId,
     );
+
+    const ownedOrg = await this.organizationsService.findByOwner(
+      currentUser.userId,
+    );
+    if (ownedOrg.id !== org.id) {
+      throw new ForbiddenException(
+        'You can only create grades for your own organization',
+      );
+    }
+
+    await this.organizationsService.assertOrganizationApproved(org.id);
+
     const grade = await this.gradeRepo.save({
       ...createGradeDto,
-      organization: { id: (await org).id },
+      organization: { id: org.id },
     });
     return grade;
   }
@@ -100,8 +113,13 @@ export class GradesService {
       }),
     };
   }
-  async update(id: string, updateGradeDto: UpdateGradeDto) {
+  async update(
+    id: string,
+    updateGradeDto: UpdateGradeDto,
+    currentUser: JwtRequestUser,
+  ) {
     const grade = await this.findOneOrFail(id);
+    await this.assertCanManageGrade(grade, currentUser);
 
     if (updateGradeDto.name !== undefined) {
       grade.name = updateGradeDto.name;
@@ -118,11 +136,31 @@ export class GradesService {
     return this.gradeRepo.save(grade);
   }
 
-  async remove(id: string) {
+  async remove(id: string, currentUser: JwtRequestUser) {
+    const grade = await this.findOneOrFail(id);
+    await this.assertCanManageGrade(grade, currentUser);
+
     const result = await this.gradeRepo.delete(id);
     if (result.affected === 0) {
       throw new NotFoundException('Grade not found');
     }
     return { message: 'Deleted successfully' };
+  }
+
+  private async assertCanManageGrade(
+    grade: Grade,
+    currentUser: JwtRequestUser,
+  ) {
+    if (
+      !(await this.organizationsService.isOrgMember(
+        currentUser.userId,
+        grade.organizationId,
+      ))
+    ) {
+      throw new ForbiddenException('You do not have access to this grade');
+    }
+    await this.organizationsService.assertOrganizationApproved(
+      grade.organizationId,
+    );
   }
 }

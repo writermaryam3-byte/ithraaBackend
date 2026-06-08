@@ -44,45 +44,61 @@ export class ClassesController {
   }
 
   @ApiOperation({ summary: 'Get all CLASSES in ORG' })
+  @Roles(UserRole.ORGANIZATIONOWNER, UserRole.ADMIN, UserRole.TEACHER)
   @Get('organization/:orgId')
-  findClassesByOrg(@Param('orgId', new ParseUUIDPipe()) orgId: string) {
-    return this.classesService.findClassesByOrg(orgId);
+  findClassesByOrg(
+    @Param('orgId', new ParseUUIDPipe()) orgId: string,
+    @Req() req: AuthRequest,
+  ) {
+    return this.classesService.findClassesByOrg(orgId, req.user);
   }
 
   @ApiOperation({ summary: 'Get all children in class' })
+  @Roles(UserRole.ORGANIZATIONOWNER, UserRole.ADMIN, UserRole.TEACHER)
   @Get(':id/get-children')
-  getChildrenInClass(@Param('id', new ParseUUIDPipe()) id: string) {
-    return this.classesService.getChildrenInClass(id);
+  getChildrenInClass(
+    @Param('id', new ParseUUIDPipe()) id: string,
+    @Req() req: AuthRequest,
+  ) {
+    return this.classesService.getChildrenInClass(id, req.user);
   }
 
   @ApiOperation({ summary: 'Get one class' })
-  @Roles(UserRole.ADMIN, UserRole.ORGANIZATIONOWNER)
+  @Roles(UserRole.ADMIN, UserRole.ORGANIZATIONOWNER, UserRole.TEACHER)
   @Get(':id')
   findOne(@Param('id', new ParseUUIDPipe()) id: string) {
     return this.classesService.findOne(id);
   }
 
   @ApiOperation({ summary: 'Update a class' })
+  @Roles(UserRole.ORGANIZATIONOWNER)
   @Patch(':id')
   update(
     @Param('id', new ParseUUIDPipe()) id: string,
     @Body() updateClassDto: UpdateClassDto,
+    @Req() req: AuthRequest,
   ) {
-    return this.classesService.update(id, updateClassDto);
+    return this.classesService.update(id, updateClassDto, req.user);
   }
 
   @ApiOperation({ summary: 'Delete a class' })
+  @Roles(UserRole.ORGANIZATIONOWNER)
   @Delete(':id')
-  remove(@Param('id', new ParseUUIDPipe()) id: string) {
-    return this.classesService.remove(id);
+  remove(
+    @Param('id', new ParseUUIDPipe()) id: string,
+    @Req() req: AuthRequest,
+  ) {
+    return this.classesService.remove(id, req.user);
   }
 
   @ApiOperation({ summary: 'asign child to class' })
+  @Roles(UserRole.ORGANIZATIONOWNER)
   @Post(':clsId/asign/:childId')
   asignChild(
     @Param('childId', new ParseUUIDPipe()) childId: string,
     @Param('clsId', new ParseUUIDPipe()) clsId: string,
+    @Req() req: AuthRequest,
   ) {
-    return this.classesService.asignChild(childId, clsId);
+    return this.classesService.asignChild(childId, clsId, req.user);
   }
 }

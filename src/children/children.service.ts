@@ -28,6 +28,7 @@ import { AttemptUsageService } from 'src/evaluations/attempt-usage.service';
 import { User } from 'src/users/entities/user.entity';
 import { TransferService } from './transfer.service';
 import { randomUUID } from 'crypto';
+import { ChildAccessPolicy } from './services/child-access-policy.service';
 
 export type CreateChildResponse = {
   status: 'CREATED' | 'TRANSFER_REQUIRED';
@@ -49,6 +50,7 @@ export class ChildrenService {
     private notificationsService: NotificationsService,
     private attemptUsageservice: AttemptUsageService,
     private transferService: TransferService,
+    private childAccessPolicy: ChildAccessPolicy,
   ) {}
 
   async isPrivateChild(id: string) {
@@ -163,6 +165,10 @@ export class ChildrenService {
           'You are not allowed to add children to this class',
         );
       }
+
+      await this.organizationsService.assertOrganizationApproved(
+        currentOrganizationId,
+      );
 
       await this.usersService.findById(currentUser.userId);
 
@@ -324,23 +330,17 @@ export class ChildrenService {
     };
   }
 
-  async findByUser(userId: string) {
+  async findByUser(userId: string, actor: JwtRequestUser) {
+    this.childAccessPolicy.assertCanListChildrenForUser(userId, actor);
+
     const [children, count] = await this.childrenRepository.findAndCount({
       where: { createdBy: { id: userId } },
     });
     return { children, count };
   }
 
-  async findOne(id: string) {
-    const child = await this.childrenRepository.findOne({
-      where: { id },
-      relations: { class: { organization: true }, parent: true },
-    });
-
-    if (!child) {
-      throw new NotFoundException('child not found');
-    }
-
+  async findOne(id: string, actor: JwtRequestUser) {
+    const child = await this.childAccessPolicy.assertCanReadChild(id, actor);
     return { child };
   }
 
@@ -349,7 +349,12 @@ export class ChildrenService {
     if (!child) throw new NotFoundException('child not found');
     return child;
   }
-  async update(id: string, updateChildDto: UpdateChildDto) {
+  async update(
+    id: string,
+    updateChildDto: UpdateChildDto,
+    actor: JwtRequestUser,
+  ) {
+    await this.childAccessPolicy.assertCanModifyChild(id, actor);
     const child = await this.childrenRepository.preload({
       id,
       ...updateChildDto,
@@ -361,7 +366,13 @@ export class ChildrenService {
   save(child: Child) {
     return this.childrenRepository.save(child);
   }
-  remove(id: string) {
-    return this.childrenRepository.delete(id);
+
+  async remove(id: string, actor: JwtRequestUser) {
+    await this.childAccessPolicy.assertCanModifyChild(id, actor);
+    const result = await this.childrenRepository.delete(id);
+    if (result.affected === 0) {
+      throw new NotFoundException('child not found');
+    }
+    return { message: 'Deleted successfully' };
   }
 }

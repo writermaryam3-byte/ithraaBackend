@@ -1,8 +1,18 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import {
+  ConflictException,
+  ForbiddenException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { UpdateOrganizationDto } from './dto/update-organization.dto';
 import { Organization } from './entities/organization.entity';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
+import { ApprovalStatus } from 'src/common/enums/approval-status.enum';
+import { OrganizationResponseDto } from './dto/organization-response.dto';
+import { JwtRequestUser } from 'src/common/interfaces/jwt-request-user.interface';
+import { UserRole } from 'src/common/enums/role.enum';
+import { hasRole } from 'src/common/utils/has-role.util';
 
 @Injectable()
 export class OrganizationsService {
@@ -10,24 +20,42 @@ export class OrganizationsService {
     @InjectRepository(Organization)
     private organizationRepository: Repository<Organization>,
   ) {}
-  // create(createOrganizationDto: CreateOrganizationDto) {
-  //   return 'This action adds a new organization';
-  // }
 
-  findAll() {
-    return this.organizationRepository.find();
+  findAll(status?: ApprovalStatus) {
+    const where = status ? { approvalStatus: status } : {};
+    return this.organizationRepository
+      .find({ where, order: { organizationName: 'ASC' } })
+      .then((orgs) => orgs.map(OrganizationResponseDto.fromEntity));
+  }
+
+  findPending() {
+    return this.findAll(ApprovalStatus.PENDING);
   }
 
   async findOne(id: string) {
-    return this.findOneOrFail(id);
+    const org = await this.findOneOrFail(id);
+    return OrganizationResponseDto.fromEntity(org);
   }
 
-  async findOneOrFail(id: string) {
+  async findOneOrFail(id: string): Promise<Organization> {
     const org = await this.organizationRepository.findOneBy({ id });
-    if (!org)
+    if (!org) {
       throw new NotFoundException(
         `organization with this id ${id} is not found`,
       );
+    }
+    return org;
+  }
+
+  async assertOrganizationApproved(
+    organizationId: string,
+  ): Promise<Organization> {
+    const org = await this.findOneOrFail(organizationId);
+    if (org.approvalStatus !== ApprovalStatus.APPROVED) {
+      throw new ForbiddenException(
+        'Organization must be approved before performing this operation',
+      );
+    }
     return org;
   }
 
@@ -46,18 +74,30 @@ export class OrganizationsService {
       );
     }
 
-    return org;
+    return OrganizationResponseDto.fromEntity(org);
   }
 
   async findByOwner(ownerId: string) {
     const org = await this.organizationRepository.findOne({
       where: { owner: { id: ownerId } },
     });
-    if (!org)
+    if (!org) {
       throw new NotFoundException(
         `organization for this owner with ${ownerId} is not found`,
       );
+    }
     return org;
+  }
+
+  async findByOwnerResponse(ownerId: string) {
+    const org = await this.findByOwner(ownerId);
+    return OrganizationResponseDto.fromEntity(org);
+  }
+
+  assertCanAccessOrganization(org: Organization, actor: JwtRequestUser) {
+    if (hasRole(actor.roles, UserRole.ADMIN)) return;
+    if (org.ownerId === actor.userId) return;
+    throw new ForbiddenException('You do not have access to this organization');
   }
 
   async isOrgMember(userId: string, orgId: string): Promise<boolean> {
@@ -81,8 +121,63 @@ export class OrganizationsService {
     return !!isTeacher;
   }
 
-  update(id: string, updateOrganizationDto: UpdateOrganizationDto) {
-    return this.organizationRepository.update(id, updateOrganizationDto);
+  async approve(id: string, adminId: string): Promise<OrganizationResponseDto> {
+    const org = await this.findOneOrFail(id);
+
+    if (org.approvalStatus === ApprovalStatus.APPROVED) {
+      throw new ConflictException('Organization is already approved');
+    }
+
+    org.approvalStatus = ApprovalStatus.APPROVED;
+    org.approvedById = adminId;
+    org.approvedAt = new Date();
+    org.rejectedById = null;
+    org.rejectedAt = null;
+    org.rejectionReason = null;
+
+    const saved = await this.organizationRepository.save(org);
+    return OrganizationResponseDto.fromEntity(saved);
+  }
+
+  async reject(
+    id: string,
+    adminId: string,
+    rejectionReason: string,
+  ): Promise<OrganizationResponseDto> {
+    const org = await this.findOneOrFail(id);
+
+    if (org.approvalStatus === ApprovalStatus.REJECTED) {
+      throw new ConflictException('Organization is already rejected');
+    }
+
+    org.approvalStatus = ApprovalStatus.REJECTED;
+    org.rejectedById = adminId;
+    org.rejectedAt = new Date();
+    org.rejectionReason = rejectionReason;
+    org.approvedById = null;
+    org.approvedAt = null;
+
+    const saved = await this.organizationRepository.save(org);
+    return OrganizationResponseDto.fromEntity(saved);
+  }
+
+  async update(
+    id: string,
+    updateOrganizationDto: UpdateOrganizationDto,
+    actor: JwtRequestUser,
+  ) {
+    const org = await this.findOneOrFail(id);
+    this.assertCanAccessOrganization(org, actor);
+
+    if (updateOrganizationDto.organizationName !== undefined) {
+      org.organizationName = updateOrganizationDto.organizationName;
+    }
+    if (updateOrganizationDto.organizationType !== undefined) {
+      org.organizationType = updateOrganizationDto.organizationType;
+    }
+
+    const saved = await this.organizationRepository.save(org);
+    return OrganizationResponseDto.fromEntity(saved);
   }
 
   async remove(id: string) {

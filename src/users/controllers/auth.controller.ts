@@ -4,6 +4,7 @@ import {
   ConflictException,
   Controller,
   Delete,
+  ForbiddenException,
   Get,
   Param,
   ParseUUIDPipe,
@@ -23,6 +24,7 @@ import { type AuthRequest } from 'src/common/interfaces/auth-request.interface';
 import { AuthProvider, TokenPayload } from '../services/auth.provider';
 import { UsersService } from '../services/users.service';
 import { ApiTags, ApiBearerAuth } from '@nestjs/swagger';
+import { Throttle } from '@nestjs/throttler';
 @ApiTags('auth')
 @ApiBearerAuth()
 @Controller('auth')
@@ -34,6 +36,7 @@ export class AuthController {
     private readonly usersService: UsersService,
   ) {}
   @Public()
+  @Throttle({ auth: { limit: 10, ttl: 60_000 } })
   @Post('login')
   async login(@Body() dto: LoginDto) {
     const user = await this.authService.validateUser(dto.phone, dto.password);
@@ -43,6 +46,7 @@ export class AuthController {
     return this.authService.login(user);
   }
   @Public()
+  @Throttle({ auth: { limit: 10, ttl: 60_000 } })
   @Post('beneficiaries-signup')
   async beneficiariesSiginup(@Body() dto: BeneficiariesSignupDto) {
     const alreadyExists = await this.authService.isAlreadyExits(
@@ -100,7 +104,14 @@ export class AuthController {
   }
 
   @Delete('logout/:sessionId')
-  async logout(@Param('sessionId', new ParseUUIDPipe()) id: string) {
+  async logout(
+    @Param('sessionId', new ParseUUIDPipe()) id: string,
+    @Req() req: AuthRequest,
+  ) {
+    const session = await this.sessionsService.findOne(id);
+    if (!session || session.userId !== req.user.userId) {
+      throw new ForbiddenException('Cannot logout this session');
+    }
     await this.sessionsService.deleteSession(id);
     return { message: 'Logged out', statusCode: 200 };
   }
@@ -109,6 +120,7 @@ export class AuthController {
     await this.sessionsService.deleteAllUserSessions(req.user.userId);
   }
 
+  @Public()
   @Get('verify-email')
   verifyEmail(@Query('token') token: string) {
     return this.authService.verifyEmail(token);

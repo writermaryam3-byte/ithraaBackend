@@ -9,6 +9,7 @@ import { DataSource } from 'typeorm';
 import { Child } from './entities/child.entity';
 import { ChildrenService } from './children.service';
 import { TransferService } from './transfer.service';
+import { ChildAccessPolicy } from './services/child-access-policy.service';
 
 describe('ChildrenService', () => {
   let service: ChildrenService;
@@ -25,6 +26,7 @@ describe('ChildrenService', () => {
         { provide: NotificationsService, useValue: {} },
         { provide: AttemptUsageService, useValue: {} },
         { provide: TransferService, useValue: {} },
+        { provide: ChildAccessPolicy, useValue: {} },
       ],
     }).compile();
 

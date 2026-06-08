@@ -16,6 +16,7 @@ import { BeneficiariesSignupDto } from '../dto/beneficiaries/beneficiaries-signu
 import { EnrichersSignupDto } from '../dto/enrichers/enrichers-signup.dto';
 import { UsersService } from './users.service';
 import { Enricher } from '../entities/enricher.entity';
+import { Organization } from 'src/organizations/entities/organization.entity';
 import { NotificationsService } from 'src/notifications/notifications.service';
 import { NotificationDelivery } from 'src/notifications/enums/notification-delivery.enum';
 
@@ -144,6 +145,9 @@ export class AuthProvider {
             manager,
           );
           await strategy?.saveExtraData(manager, user, dto);
+          const organization = await manager.findOne(Organization, {
+            where: { ownerId: user.id },
+          });
           await this.notificationsService.enqueue({
             userId: user.id,
             title: 'Welcome 🎉',
@@ -158,7 +162,17 @@ export class AuthProvider {
             delivery: NotificationDelivery.VERIFY_EMAIL, // email + inapp
             email: user.email,
           });
-          return user;
+          return {
+            user,
+            organization: organization
+              ? {
+                  id: organization.id,
+                  organizationName: organization.organizationName,
+                  organizationType: organization.organizationType,
+                  approvalStatus: organization.approvalStatus,
+                }
+              : null,
+          };
         }
       }
     });

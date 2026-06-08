@@ -20,7 +20,6 @@ async function bootstrap() {
 
       const constraints = Object.values(err.constraints ?? {});
       if (constraints.length > 0) {
-        // Keep the first message for each field (consistent with previous behavior)
         out[path] = constraints[0];
       }
 
@@ -43,18 +42,23 @@ async function bootstrap() {
     }),
   );
 
+  const corsOrigins = process.env.CORS_ORIGINS?.split(',')
+    .map((origin) => origin.trim())
+    .filter(Boolean);
+
   app.enableCors({
-    origin: '*',
+    origin: corsOrigins?.length ? corsOrigins : true,
     methods: 'GET,HEAD,PUT,PATCH,POST,DELETE',
     credentials: true,
-  });
+   });
+
   app.setGlobalPrefix('api');
 
   const config = new DocumentBuilder()
     .setTitle('Ithraa Backend')
     .setDescription('API documentation')
     .setVersion('1.0')
-    .addBearerAuth() // لو عندك JWT
+    .addBearerAuth()
     .build();
 
   const document = SwaggerModule.createDocument(app, config);

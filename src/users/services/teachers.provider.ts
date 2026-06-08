@@ -1,5 +1,6 @@
 import {
   ConflictException,
+  ForbiddenException,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
@@ -36,6 +37,7 @@ export class TeachersProvider {
       const organization = await this.orgService.findByOwner(
         currentUser.userId,
       );
+      await this.orgService.assertOrganizationApproved(organization.id);
       const user = await this.usersService.create(
         {
           name: dto.name,
@@ -59,13 +61,27 @@ export class TeachersProvider {
     });
   }
 
-  async update(id: string, updateTeacherDto: UpdateTeacherDto) {
+  async update(
+    id: string,
+    updateTeacherDto: UpdateTeacherDto,
+    currentUser: JwtRequestUser,
+  ) {
     const teacher = await this.dataSource.getRepository(Teacher).findOne({
       where: { id },
       relations: ['user', 'organization'],
     });
 
     if (!teacher) throw new NotFoundException('Teacher not found');
+
+    if (
+      !(await this.orgService.isOrgMember(
+        currentUser.userId,
+        teacher.organization.id,
+      ))
+    ) {
+      throw new ForbiddenException('You do not have access to this teacher');
+    }
+    await this.orgService.assertOrganizationApproved(teacher.organization.id);
 
     // لو فيه organizationId جديد
     if (updateTeacherDto.organizationId) {
@@ -84,9 +100,18 @@ export class TeachersProvider {
     return this.dataSource.getRepository(Teacher).save(teacher);
   }
 
-  async findAllByOrganization(organizationId: string): Promise<{
+  async findAllByOrganization(
+    organizationId: string,
+    currentUser: JwtRequestUser,
+  ): Promise<{
     teachers: ITeacherResponseDto[];
   }> {
+    if (
+      !(await this.orgService.isOrgMember(currentUser.userId, organizationId))
+    ) {
+      throw new ForbiddenException('You do not have access to this organization');
+    }
+
     const organization = await this.dataSource
       .getRepository(Organization)
       .findOne({
@@ -118,5 +143,26 @@ export class TeachersProvider {
         };
       }),
     };
+  }
+
+  async remove(id: string, currentUser: JwtRequestUser) {
+    const teacher = await this.teacherRepo.findOne({
+      where: { id },
+      relations: ['organization', 'user'],
+    });
+    if (!teacher) throw new NotFoundException('Teacher not found');
+
+    if (
+      !(await this.orgService.isOrgMember(
+        currentUser.userId,
+        teacher.organization.id,
+      ))
+    ) {
+      throw new ForbiddenException('You do not have access to this teacher');
+    }
+    await this.orgService.assertOrganizationApproved(teacher.organization.id);
+
+    await this.teacherRepo.delete(id);
+    return this.usersService.remove(teacher.user.id);
   }
 }

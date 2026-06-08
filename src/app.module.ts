@@ -20,10 +20,35 @@ import { EvaluationsModule } from 'src/evaluations/evaluations.module';
 import { ScheduleModule } from '@nestjs/schedule';
 import { PaymentsModule } from 'src/payments/payments.module';
 import { DealsModule } from 'src/deals/deals.module';
+import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
+import { UploadsModule } from './uploads/uploads.module';
+import { LegacyTestsModule } from './legacy-tests/legacy-tests.module';
 
 @Module({
   imports: [
     ConfigModule.forRoot({ isGlobal: true }),
+    ThrottlerModule.forRoot([
+      {
+        name: 'default',
+        ttl: 60_000,
+        limit: 120,
+      },
+      {
+        name: 'auth',
+        ttl: 60_000,
+        limit: 10,
+      },
+      {
+        name: 'upload',
+        ttl: 60_000,
+        limit: 20,
+      },
+      {
+        name: 'assessment',
+        ttl: 60_000,
+        limit: 30,
+      },
+    ]),
     EventEmitterModule.forRoot({
       // Wildcards are handy for future `evaluation.*` listeners
       wildcard: true,
@@ -64,6 +89,8 @@ import { DealsModule } from 'src/deals/deals.module';
     EvaluationsModule,
     PaymentsModule,
     DealsModule,
+    UploadsModule,
+    LegacyTestsModule,
   ],
   controllers: [AppController],
   providers: [
@@ -75,6 +102,10 @@ import { DealsModule } from 'src/deals/deals.module';
     {
       provide: APP_GUARD,
       useClass: RolesGuard,
+    },
+    {
+      provide: APP_GUARD,
+      useClass: ThrottlerGuard,
     },
     {
       provide: APP_INTERCEPTOR,

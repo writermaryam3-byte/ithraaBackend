@@ -3,6 +3,7 @@ import {
   Inject,
   Injectable,
   NotFoundException,
+  ForbiddenException,
 } from '@nestjs/common';
 import { CreateClassDto } from './dto/create-class.dto';
 import { UpdateClassDto } from './dto/update-class.dto';
@@ -33,6 +34,14 @@ export class ClassesService {
     const { gradeId, teacherId, name } = createClassDto;
     const grade = await this.gradesService.findOne(gradeId);
     const organization = await this.orgService.findByOwner(currentUser.userId);
+    await this.orgService.assertOrganizationApproved(organization.id);
+
+    if (grade.grade.organizationId !== organization.id) {
+      throw new ForbiddenException(
+        'Grade does not belong to your organization',
+      );
+    }
+
     const cls = this.classesRepo.create({
       name,
       grade: grade.grade,
@@ -77,7 +86,11 @@ export class ClassesService {
     };
   }
 
-  async findClassesByOrg(orgId: string) {
+  async findClassesByOrg(orgId: string, currentUser: JwtRequestUser) {
+    if (!(await this.orgService.isOrgMember(currentUser.userId, orgId))) {
+      throw new ForbiddenException('You do not have access to this organization');
+    }
+
     const org = await this.orgService.findOneOrFail(orgId);
     const classes = await this.classesRepo.find({
       where: { organization: { id: org.id } },
@@ -123,8 +136,13 @@ export class ClassesService {
     });
   }
 
-  async update(id: string, updateClassDto: UpdateClassDto) {
+  async update(
+    id: string,
+    updateClassDto: UpdateClassDto,
+    currentUser: JwtRequestUser,
+  ) {
     const cls = await this.findOneOrFail(id);
+    await this.assertCanManageClass(cls, currentUser);
     const { gradeId, teacherId, ...rest } = updateClassDto;
 
     if (gradeId) {
@@ -147,7 +165,10 @@ export class ClassesService {
     return await this.classesRepo.save(cls);
   }
 
-  async remove(id: string) {
+  async remove(id: string, currentUser: JwtRequestUser) {
+    const cls = await this.findOneOrFail(id);
+    await this.assertCanManageClass(cls, currentUser);
+
     const result = await this.classesRepo.delete({ id });
 
     if (result.affected === 0) {
@@ -157,16 +178,37 @@ export class ClassesService {
     return { message: 'Deleted successfully' };
   }
 
-  async asignChild(childId: string, clsId: string) {
-    const child = await this.childrenService.findOneOrFail(childId);
+  async asignChild(
+    childId: string,
+    clsId: string,
+    currentUser: JwtRequestUser,
+  ) {
     const cls = await this.findOneOrFail(clsId);
+    await this.assertCanManageClass(cls, currentUser);
+    await this.orgService.assertOrganizationApproved(cls.organization.id);
+
+    const child = await this.childrenService.findOneOrFail(childId);
     child.class = cls;
     await this.childrenService.save(child);
     return { message: 'child asigned successfully' };
   }
 
-  async getChildrenInClass(clsId: string) {
-    const cls = await this.findOne(clsId);
-    return cls.children;
+  async getChildrenInClass(clsId: string, currentUser: JwtRequestUser) {
+    const cls = await this.findOneOrFail(clsId);
+    if (!(await this.orgService.isOrgMember(currentUser.userId, cls.organization.id))) {
+      throw new ForbiddenException('You do not have access to this class');
+    }
+    const full = await this.findOne(clsId);
+    return full.children;
+  }
+
+  private async assertCanManageClass(
+    cls: Class,
+    currentUser: JwtRequestUser,
+  ) {
+    if (!(await this.orgService.isOrgMember(currentUser.userId, cls.organization.id))) {
+      throw new ForbiddenException('You do not have access to this class');
+    }
+    await this.orgService.assertOrganizationApproved(cls.organization.id);
   }
 }

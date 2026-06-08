@@ -23,7 +23,8 @@ import type { AuthRequest } from 'src/common/interfaces/auth-request.interface';
 @Controller('children')
 export class ChildrenController {
   constructor(private readonly childrenService: ChildrenService) {}
-  @Roles(UserRole.ORGANIZATIONOWNER, UserRole.PARENT, UserRole.TEACHER)
+
+  @Roles(UserRole.ORGANIZATIONOWNER, UserRole.TEACHER)
   @Post()
   @ApiOperation({
     summary:
@@ -46,9 +47,12 @@ export class ChildrenController {
   }
 
   @Get()
-  @ApiOperation({ summary: 'Get all children for specific user' })
-  findByUser(@Query('userId', new ParseUUIDPipe()) userId: string) {
-    return this.childrenService.findByUser(userId);
+  @ApiOperation({ summary: 'Get all children for specific user (self or admin)' })
+  findByUser(
+    @Query('userId', new ParseUUIDPipe()) userId: string,
+    @Req() req: AuthRequest,
+  ) {
+    return this.childrenService.findByUser(userId, req.user);
   }
 
   @Roles(UserRole.ORGANIZATIONOWNER, UserRole.ADMIN, UserRole.TEACHER)
@@ -63,8 +67,11 @@ export class ChildrenController {
 
   @Get(':id')
   @ApiOperation({ summary: 'Get child data' })
-  findOne(@Param('id', new ParseUUIDPipe()) id: string) {
-    return this.childrenService.findOne(id);
+  findOne(
+    @Param('id', new ParseUUIDPipe()) id: string,
+    @Req() req: AuthRequest,
+  ) {
+    return this.childrenService.findOne(id, req.user);
   }
 
   @Patch(':id')
@@ -72,13 +79,17 @@ export class ChildrenController {
   update(
     @Param('id', new ParseUUIDPipe()) id: string,
     @Body() updateChildDto: UpdateChildDto,
+    @Req() req: AuthRequest,
   ) {
-    return this.childrenService.update(id, updateChildDto);
+    return this.childrenService.update(id, updateChildDto, req.user);
   }
 
   @Delete(':id')
   @ApiOperation({ summary: 'Delete child' })
-  remove(@Param('id', new ParseUUIDPipe()) id: string) {
-    return this.childrenService.remove(id);
+  remove(
+    @Param('id', new ParseUUIDPipe()) id: string,
+    @Req() req: AuthRequest,
+  ) {
+    return this.childrenService.remove(id, req.user);
   }
 }

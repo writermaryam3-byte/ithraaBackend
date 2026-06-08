@@ -14,6 +14,7 @@ import { ClassesModule } from 'src/classes/classes.module';
 import { EvaluationsModule } from 'src/evaluations/evaluations.module';
 import { TransferService } from './transfer.service';
 import { TransfersController } from './transfers.controller';
+import { ChildAccessPolicy } from './services/child-access-policy.service';
 
 @Module({
   controllers: [
@@ -21,7 +22,7 @@ import { TransfersController } from './transfers.controller';
     ParentChildrenController,
     TransfersController,
   ],
-  providers: [ChildrenService, TransferService],
+  providers: [ChildrenService, TransferService, ChildAccessPolicy],
   imports: [
     TypeOrmModule.forFeature([
       Child,
