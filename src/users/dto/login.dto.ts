@@ -6,8 +6,8 @@ export class LoginDto {
   @ApiProperty({
     example: '+2015013657687',
   })
-  @IsPhoneNumber()
   @Transform(({ value }: { value: string }) => value.replace(/[\s\-()]/g, ''))
+  @IsPhoneNumber()
   phone: string;
 
   @ApiProperty({

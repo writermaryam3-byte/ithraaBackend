@@ -40,7 +40,7 @@ export class BaseSignupDto {
   @ApiProperty({
     example: '+201503657687',
   })
-  @IsPhoneNumber()
   @Transform(({ value }: { value: string }) => value.replace(/[\s\-()]/g, ''))
+  @IsPhoneNumber()
   phone: string;
 }
