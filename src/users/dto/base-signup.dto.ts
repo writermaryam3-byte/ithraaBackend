@@ -41,5 +41,6 @@ export class BaseSignupDto {
     example: '+201503657687',
   })
   @IsPhoneNumber()
+  @Transform(({ value }: { value: string }) => value.replace(/[\s\-()]/g, ''))
   phone: string;
 }
