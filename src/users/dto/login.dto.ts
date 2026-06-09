@@ -1,10 +1,12 @@
 import { ApiProperty } from '@nestjs/swagger';
+import { Transform } from 'class-transformer';
 import { IsPhoneNumber, IsString, Length, Matches } from 'class-validator';
 
 export class LoginDto {
   @ApiProperty({
     example: '+2015013657687',
   })
+  @Transform(({ value }: { value: string }) => value.replace(/[\s\-()]/g, ''))
   @IsPhoneNumber()
   phone: string;
 
