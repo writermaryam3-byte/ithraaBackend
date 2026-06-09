@@ -36,6 +36,7 @@ export class ChildrenController {
     @Req()
     req: AuthRequest,
   ) {
+    console.log('hi', createChildDto);
     return this.childrenService.createChild(createChildDto, req.user);
   }
 
@@ -47,7 +48,9 @@ export class ChildrenController {
   }
 
   @Get()
-  @ApiOperation({ summary: 'Get all children for specific user (self or admin)' })
+  @ApiOperation({
+    summary: 'Get all children for specific user (self or admin)',
+  })
   findByUser(
     @Query('userId', new ParseUUIDPipe()) userId: string,
     @Req() req: AuthRequest,

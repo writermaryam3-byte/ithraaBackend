@@ -109,7 +109,9 @@ export class TeachersProvider {
     if (
       !(await this.orgService.isOrgMember(currentUser.userId, organizationId))
     ) {
-      throw new ForbiddenException('You do not have access to this organization');
+      throw new ForbiddenException(
+        'You do not have access to this organization',
+      );
     }
 
     const organization = await this.dataSource

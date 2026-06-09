@@ -74,7 +74,6 @@ export class AuthProvider {
 
   async validateUser(phone: string, pass: string) {
     const user = await this.usersService.findByPhone(phone);
-
     if (!user) return null;
 
     const match = await bcrypt.compare(pass, user.password);

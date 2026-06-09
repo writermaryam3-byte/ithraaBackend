@@ -216,17 +216,38 @@ export class ChildrenService {
             'parentName is required when creating a new parent',
           );
         }
+        const tempPassword = this.createTemporaryPassword();
+        console.log(tempPassword);
         parent = await this.usersService.create(
           {
             name: dto.parentName,
             email:
               parentEmail ?? this.createPlaceholderParentEmail(dto.parentPhone),
             phone: dto.parentPhone,
-            password: this.createTemporaryPassword(),
+            password: tempPassword,
           },
           [UserRole.PARENT],
           manager,
         );
+
+        // Send temporary password
+        await this.notificationsService.enqueue({
+          userId: parent.id,
+          title: 'Your Account Has Been Created',
+          message: `Your temporary password is: ${tempPassword}. Please change it after logging in.`,
+          delivery: NotificationDelivery.EMAIL,
+          email: parent.email,
+        });
+
+        // Send email verification
+        await this.notificationsService.enqueue({
+          userId: parent.id,
+          title: 'Verify Your Email',
+          message:
+            'Please verify your email address to activate your account and receive important notifications.',
+          delivery: NotificationDelivery.VERIFY_EMAIL,
+          email: parent.email,
+        });
       }
 
       const childRepo = manager.getRepository(Child);
