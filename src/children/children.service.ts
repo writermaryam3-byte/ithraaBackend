@@ -260,8 +260,30 @@ export class ChildrenService {
         manager,
       );
 
-      // Check for existing organization child by birthDate and ParentProfile
+      // Check parent's total children limit
+      const privateChildRepo = manager.getRepository(PrivateChild);
       const orgChildRepo = manager.getRepository(OrganizationChild);
+      const privateChildCount = await privateChildRepo.count({
+        where: { parent: { id: parentProfile.id } },
+      });
+      const orgChildCount = await orgChildRepo.count({
+        where: { parent: { id: parentProfile.id } },
+      });
+      const totalChildCount = privateChildCount + orgChildCount;
+
+      if (totalChildCount >= parentProfile.maxChildren) {
+        await this.notificationsService.enqueue({
+          delivery: NotificationDelivery.IN_APP,
+          userId: parentProfile.userId,
+          title: 'Child limit reached',
+          message: `Parent has reached the maximum of ${parentProfile.maxChildren} children on their account.`,
+        });
+        throw new ForbiddenException(
+          `Parent has reached the child limit (${parentProfile.maxChildren}). Please request additional capacity.`,
+        );
+      }
+
+      // Check for existing organization child by birthDate and ParentProfile
       const existingChild = await orgChildRepo.findOne({
         where: {
           birthDate: dto.birthDate,

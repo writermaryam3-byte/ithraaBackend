@@ -299,7 +299,7 @@ export class EvaluationsService {
       .andWhere('(evaluation.ageTo IS NULL OR evaluation.ageTo >= :age)', { age });
 
     if (orgChild.class) {
-      qb.andWhere('evaluation.institutionId = :institutionId', {
+      qb.andWhere('(evaluation.institutionId = :institutionId OR evaluation.institutionId IS NULL)', {
         institutionId: orgChild.class.organization.id,
       });
     }

@@ -30,6 +30,14 @@ import { EvaluationApprovalService } from './services/evaluation-approval.servic
 import { EvaluationSlotService } from './services/evaluation-slot.service';
 import { AdminPrivateAttemptsController } from './admin-private-attempts.controller';
 import { UsersModule } from 'src/users/users.module';
+import { ScoringStrategyFactory } from './strategies/scoring-strategy.factory';
+import { MultipleIntelligencesStrategy } from './strategies/multiple-intelligences.strategy';
+import { HollandStrategy } from './strategies/holland.strategy';
+import { RenzulliStrategy } from './strategies/renzulli.strategy';
+import { PrideStrategy } from './strategies/pride.strategy';
+import { LearningStylesStrategy } from './strategies/learning-styles.strategy';
+import { TorranceStrategy } from './strategies/torrance.strategy';
+import { EvaluationSeedingService } from './evaluation-seeding.service';
 
 @Module({
   imports: [
@@ -69,6 +77,14 @@ import { UsersModule } from 'src/users/users.module';
     EvaluationSubmissionService,
     EvaluationApprovalService,
     EvaluationSlotService,
+    ScoringStrategyFactory,
+    MultipleIntelligencesStrategy,
+    HollandStrategy,
+    RenzulliStrategy,
+    PrideStrategy,
+    LearningStylesStrategy,
+    TorranceStrategy,
+    EvaluationSeedingService,
   ],
   exports: [AttemptUsageService, EvaluationSlotService],
 })

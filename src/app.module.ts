@@ -23,9 +23,13 @@ import { DealsModule } from 'src/deals/deals.module';
 import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
 import { UploadsModule } from './uploads/uploads.module';
 import { LegacyTestsModule } from './legacy-tests/legacy-tests.module';
+import { CommonModule } from './common/common.module';
+import { AuditLogInterceptor } from './common/interceptors/audit-log.interceptor';
+import { CapacityModule } from './capacity/capacity.module';
 
 @Module({
   imports: [
+    CommonModule,
     ConfigModule.forRoot({ isGlobal: true }),
     ThrottlerModule.forRoot([
       {
@@ -91,6 +95,7 @@ import { LegacyTestsModule } from './legacy-tests/legacy-tests.module';
     DealsModule,
     UploadsModule,
     LegacyTestsModule,
+    CapacityModule,
   ],
   controllers: [AppController],
   providers: [
@@ -110,6 +115,10 @@ import { LegacyTestsModule } from './legacy-tests/legacy-tests.module';
     {
       provide: APP_INTERCEPTOR,
       useClass: ClassSerializerInterceptor,
+    },
+    {
+      provide: APP_INTERCEPTOR,
+      useClass: AuditLogInterceptor,
     },
   ],
 })

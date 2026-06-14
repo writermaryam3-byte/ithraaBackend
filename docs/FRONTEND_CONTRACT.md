@@ -14,6 +14,129 @@
 > - The backend automatically resolves the correct entity based on the ID and type
 > - Response objects include either `organizationChildId` or `privateChildId` (never both)
 > - Use the helper functions `resolveChild()`, `getChildId()`, and `getChildType()` for child resolution in backend code
+>
+> **Frontend Migration Guide:**
+> 1. Update all API calls that use `childId` to include `childType` parameter
+> 2. Update response handling to check for `organizationChildId` or `privateChildId` fields
+> 3. Update UI components to display child type information where relevant
+> 4. Update form validation to require child type selection when creating/assigning children
+> 5. Update state management to track child type alongside child ID
+>
+> **TypeScript Types for Frontend:**
+> ```typescript
+> type ChildType = 'organization' | 'private';
+> 
+> interface ChildReference {
+>   childId: string;
+>   childType: ChildType;
+> }
+> 
+> interface OrganizationChild {
+>   id: string;
+>   name: string;
+>   birthDate: string;
+>   gender: 'male' | 'female';
+>   organizationId: string;
+>   classId: string | null;
+>   parentId: string;
+>   createdAt: string;
+>   updatedAt: string;
+> }
+> 
+> interface PrivateChild {
+>   id: string;
+>   name: string;
+>   birthDate: string;
+>   gender: 'male' | 'female';
+>   parentId: string;
+>   createdAt: string;
+>   updatedAt: string;
+> }
+> 
+> type Child = OrganizationChild | PrivateChild;
+> 
+> interface EvaluationAttempt {
+>   id: string;
+>   organizationChildId: string | null;
+>   privateChildId: string | null;
+>   // Use getChildId(attempt) to get the actual child ID
+> }
+> 
+> // Helper function for frontend
+> function getChildId(attempt: EvaluationAttempt): string | null {
+>   return attempt.organizationChildId || attempt.privateChildId || null;
+> }
+> 
+> function getChildType(attempt: EvaluationAttempt): ChildType | null {
+>   if (attempt.organizationChildId) return 'organization';
+>   if (attempt.privateChildId) return 'private';
+>   return null;
+> }
+> ```
+
+---
+
+## Child Entity Split - Complete Endpoint Reference
+
+### Endpoints Requiring `childType` Parameter
+
+| Endpoint | Method | childType Required | Notes |
+|----------|--------|-------------------|-------|
+| `/child-transfers` | POST | Yes | Required for transfer requests |
+| `/evaluations/:id/start` | POST | Yes | Required to start evaluation |
+| `/evaluations/owner/children/:childId/reminder` | POST | No | Backend auto-resolves from ID |
+
+### Endpoints Returning Child References
+
+| Endpoint | Response Fields | Notes |
+|----------|----------------|-------|
+| `/children` | `organizationChildId` or `privateChildId` | Never both |
+| `/attempts` | `organizationChildId` or `privateChildId` | Never both |
+| `/evaluations/owner/classes/:classId/evaluations/:evaluationId/summary` | `organizationChildId` or `privateChildId` | Never both |
+| `/child-transfers` | `organizationChildId` or `privateChildId` | Never both |
+
+### Response Format Examples
+
+**OrganizationChild Response:**
+```json
+{
+  "id": "uuid",
+  "name": "Ahmed",
+  "birthDate": "2018-05-15",
+  "gender": "male",
+  "organizationId": "uuid",
+  "classId": "uuid",
+  "parentId": "uuid",
+  "createdAt": "2024-01-01T00:00:00.000Z",
+  "updatedAt": "2024-01-01T00:00:00.000Z"
+}
+```
+
+**PrivateChild Response:**
+```json
+{
+  "id": "uuid",
+  "name": "Sara",
+  "birthDate": "2018-05-15",
+  "gender": "female",
+  "parentId": "uuid",
+  "createdAt": "2024-01-01T00:00:00.000Z",
+  "updatedAt": "2024-01-01T00:00:00.000Z"
+}
+```
+
+**EvaluationAttempt Response:**
+```json
+{
+  "id": "uuid",
+  "organizationChildId": "uuid",
+  "privateChildId": null,
+  "evaluationId": "uuid",
+  "parentId": "uuid",
+  "status": "submitted",
+  "score": 85
+}
+```
 
 ---
 
@@ -109,6 +232,11 @@ email, inapp, both, verify_email
 ### AuditAction
 ```
 CREATE, UPDATE, DELETE, APPROVE, REJECT, LOGIN, LOGOUT, TRANSFER_REQUEST, TRANSFER_APPROVE, TRANSFER_REJECT, PAYMENT_SUCCESS, PAYMENT_FAILURE, EVALUATION_START, EVALUATION_SUBMIT, EVALUATION_APPROVE, DEAL_CREATE, DEAL_SELECT, DEAL_APPROVE, ORGANIZATION_APPROVE, ORGANIZATION_REJECT
+```
+
+### ChildType
+```
+organization = "organization", private = "private"
 ```
 
 ---
@@ -303,20 +431,86 @@ CREATE, UPDATE, DELETE, APPROVE, REJECT, LOGIN, LOGOUT, TRANSFER_REQUEST, TRANSF
 ### GET `/children/all` — All children
 - **Roles**: ADMIN
 - **Response**: Returns both `OrganizationChild` and `PrivateChild` entities
+- **Response Format**:
+```json
+{
+  "organizationChildren": [
+    {
+      "id": "uuid",
+      "name": "Ahmed",
+      "birthDate": "2018-05-15",
+      "gender": "male",
+      "organizationId": "uuid",
+      "classId": "uuid",
+      "parentId": "uuid"
+    }
+  ],
+  "privateChildren": [
+    {
+      "id": "uuid",
+      "name": "Sara",
+      "birthDate": "2018-05-15",
+      "gender": "female",
+      "parentId": "uuid"
+    }
+  ]
+}
+```
 
 ### GET `/children` — By user
 - **Roles**: ADMIN, PARENT
 - **Query**: `?userId=<uuid>`
 - **Response**: Returns both `OrganizationChild` and `PrivateChild` entities for the user
+- **Response Format**: Same as `/children/all`
 
 ### GET `/children/organization/:orgId` — By org
 - **Roles**: ORGANIZATIONOWNER, ADMIN, TEACHER
 - **Response**: Returns `OrganizationChild` entities for the organization
+- **Response Format**:
+```json
+[
+  {
+    "id": "uuid",
+    "name": "Ahmed",
+    "birthDate": "2018-05-15",
+    "gender": "male",
+    "organizationId": "uuid",
+    "classId": "uuid",
+    "parentId": "uuid"
+  }
+]
+```
 
 ### GET `/children/:id` — Get child
 - **Roles**: ADMIN, PARENT, ORGANIZATIONOWNER, TEACHER (via policy)
 - **Response**: Returns either `OrganizationChild` or `PrivateChild` entity based on ID
 > **Note**: The backend automatically resolves the child type (organization or private) based on the ID.
+- **Response Format (OrganizationChild)**:
+```json
+{
+  "id": "uuid",
+  "name": "Ahmed",
+  "birthDate": "2018-05-15",
+  "gender": "male",
+  "organizationId": "uuid",
+  "classId": "uuid",
+  "parentId": "uuid",
+  "createdAt": "2024-01-01T00:00:00.000Z",
+  "updatedAt": "2024-01-01T00:00:00.000Z"
+}
+```
+- **Response Format (PrivateChild)**:
+```json
+{
+  "id": "uuid",
+  "name": "Sara",
+  "birthDate": "2018-05-15",
+  "gender": "female",
+  "parentId": "uuid",
+  "createdAt": "2024-01-01T00:00:00.000Z",
+  "updatedAt": "2024-01-01T00:00:00.000Z"
+}
+```
 
 ### PATCH `/children/:id` — Update child
 - **Roles**: PARENT, ORGANIZATIONOWNER, TEACHER, ADMIN
@@ -341,13 +535,56 @@ CREATE, UPDATE, DELETE, APPROVE, REJECT, LOGIN, LOGOUT, TRANSFER_REQUEST, TRANSF
   "gender": "male"
 }
 ```
-- **Response**: `{ id, name, birthDate, gender, ... }`
+- **Response**:
+```json
+{
+  "id": "uuid",
+  "name": "child-name",
+  "birthDate": "2007-02-28",
+  "gender": "male",
+  "parentId": "uuid",
+  "createdAt": "2024-01-01T00:00:00.000Z",
+  "updatedAt": "2024-01-01T00:00:00.000Z"
+}
+```
 
 ### GET `/parent/children` — My private children
 - **Roles**: PARENT
+- **Response**: Array of `PrivateChild` entities
+- **Response Format**:
+```json
+[
+  {
+    "id": "uuid",
+    "name": "Sara",
+    "birthDate": "2018-05-15",
+    "gender": "female",
+    "parentId": "uuid",
+    "createdAt": "2024-01-01T00:00:00.000Z",
+    "updatedAt": "2024-01-01T00:00:00.000Z"
+  }
+]
+```
 
 ### GET `/parent/org-children` — My organization children
 - **Roles**: PARENT
+- **Response**: Array of `OrganizationChild` entities
+- **Response Format**:
+```json
+[
+  {
+    "id": "uuid",
+    "name": "Ahmed",
+    "birthDate": "2018-05-15",
+    "gender": "male",
+    "organizationId": "uuid",
+    "classId": "uuid",
+    "parentId": "uuid",
+    "createdAt": "2024-01-01T00:00:00.000Z",
+    "updatedAt": "2024-01-01T00:00:00.000Z"
+  }
+]
+```
 
 ---
 
@@ -376,6 +613,23 @@ CREATE, UPDATE, DELETE, APPROVE, REJECT, LOGIN, LOGOUT, TRANSFER_REQUEST, TRANSF
 - **Roles**: ORGANIZATIONOWNER, ADMIN
 - **Query**: `?toOrganizationId=&fromOrganizationId=&status=PENDING`
 - **Response**: Each request includes `organizationChildId` or `privateChildId` (never both)
+- **Response Format**:
+```json
+{
+  "requests": [
+    {
+      "id": "uuid",
+      "organizationChildId": "uuid",
+      "privateChildId": null,
+      "fromOrganizationId": "uuid",
+      "toOrganizationId": "uuid",
+      "status": "PENDING",
+      "createdAt": "2024-01-01T00:00:00.000Z"
+    }
+  ],
+  "total": 1
+}
+```
 
 ---
 
@@ -658,10 +912,31 @@ CREATE, UPDATE, DELETE, APPROVE, REJECT, LOGIN, LOGOUT, TRANSFER_REQUEST, TRANSF
 - **Roles**: ADMIN
 - **Query**: `?status=in_progress&evaluationId=&organizationChildId=&privateChildId=`
 - **Response**: Attempts include either `organizationChildId` or `privateChildId` (never both)
+- **Response Format**:
+```json
+{
+  "attempts": [
+    {
+      "id": "uuid",
+      "organizationChildId": "uuid",
+      "privateChildId": null,
+      "evaluationId": "uuid",
+      "parentId": "uuid",
+      "status": "submitted",
+      "score": 85,
+      "attemptNumber": 1,
+      "startedAt": "2024-01-01T10:00:00.000Z",
+      "submittedAt": "2024-01-01T10:30:00.000Z"
+    }
+  ],
+  "total": 1
+}
+```
 
 ### GET `/attempts/child/:childId` — Child's attempts
 - **Roles**: PARENT, ADMIN
 > **Note**: `childId` can refer to either `organizationChildId` or `privateChildId`. The backend automatically resolves the child type.
+- **Response Format**: Same as `/attempts`
 
 ### POST `/attempts/:childId/start` — Start free main slot
 - **Roles**: PARENT
@@ -721,20 +996,37 @@ CREATE, UPDATE, DELETE, APPROVE, REJECT, LOGIN, LOGOUT, TRANSFER_REQUEST, TRANSF
 ```json
 {
   "classId": "uuid",
-  "className": "string",
+  "className": "Grade 1-A",
   "highestScore": 95,
   "averageScore": 72.5,
   "lowestScore": 45,
-  "topDimensions": [{ "code": "linguistic", "name": "الذكاء اللغوي", "percentage": 85, "score": 10 }],
+  "topDimensions": [
+    { 
+      "code": "linguistic", 
+      "name": "الذكاء اللغوي", 
+      "percentage": 85, 
+      "score": 10 
+    }
+  ],
   "children": [
     {
-      "organizationChildId": "uuid | null",
-      "privateChildId": "uuid | null",
-      "childName": "string",
-      "className": "string",
-      "topResultLabel": "string|null",
-      "topDimensionName": "string|null",
+      "organizationChildId": "uuid",
+      "privateChildId": null,
+      "childName": "Ahmed",
+      "className": "Grade 1-A",
+      "topResultLabel": "High linguistic intelligence",
+      "topDimensionName": "الذكاء اللغوي",
       "score": 80,
+      "status": "submitted"
+    },
+    {
+      "organizationChildId": null,
+      "privateChildId": "uuid",
+      "childName": "Sara",
+      "className": null,
+      "topResultLabel": "High spatial intelligence",
+      "topDimensionName": "الذكاء المكاني",
+      "score": 90,
       "status": "submitted"
     }
   ]
@@ -871,6 +1163,101 @@ CREATE, UPDATE, DELETE, APPROVE, REJECT, LOGIN, LOGOUT, TRANSFER_REQUEST, TRANSF
 | 409 | Conflict (e.g. duplicate) |
 | 429 | Too many requests (rate limit) |
 | 500 | Internal server error |
+
+---
+
+## Frontend Migration Checklist
+
+### Phase 1: Type Definitions
+- [ ] Add `ChildType` type to shared types
+- [ ] Add `OrganizationChild` and `PrivateChild` interfaces
+- [ ] Add `ChildReference` interface with `childId` and `childType`
+- [ ] Add helper functions `getChildId()` and `getChildType()`
+- [ ] Update existing `Child` type to be a union of both types
+
+### Phase 2: API Client Updates
+- [ ] Update API client to accept `childType` parameter where required
+- [ ] Update request interceptors to add `childType` when available
+- [ ] Update response interceptors to handle dual child ID fields
+- [ ] Add validation for `childType` in API calls
+
+### Phase 3: Component Updates
+- [ ] Update child selection components to include child type
+- [ ] Update child list components to display child type
+- [ ] Update child detail components to handle both entity types
+- [ ] Update evaluation components to use child type
+- [ ] Update transfer components to use child type
+- [ ] Update payment components to use private child ID
+
+### Phase 4: State Management
+- [ ] Update Redux/Zustand stores to track child type
+- [ ] Update local state in components using child data
+- [ ] Update form state to include child type
+- [ ] Update cache keys to include child type
+
+### Phase 5: UI/UX Updates
+- [ ] Add visual indicators for child type (organization vs private)
+- [ ] Update form labels to clarify child type selection
+- [ ] Add error messages for missing child type
+- [ ] Update success messages to reflect child type
+- [ ] Add tooltips/help text for child type selection
+
+### Phase 6: Testing
+- [ ] Unit tests for type definitions
+- [ ] Unit tests for helper functions
+- [ ] Integration tests for API calls with child type
+- [ ] Component tests for child type handling
+- [ ] E2E tests for complete flows with child type
+
+### Common Patterns
+
+**Pattern 1: Making API Calls with Child Type**
+```typescript
+// Before
+await api.startEvaluation({ childId: 'uuid' });
+
+// After
+await api.startEvaluation({ 
+  childId: 'uuid', 
+  childType: 'organization' // or 'private'
+});
+```
+
+**Pattern 2: Handling Child References in Responses**
+```typescript
+// Before
+const childId = attempt.childId;
+
+// After
+const childId = attempt.organizationChildId || attempt.privateChildId;
+const childType = attempt.organizationChildId ? 'organization' : 'private';
+```
+
+**Pattern 3: Displaying Child Information**
+```typescript
+// Before
+const child = await api.getChild(childId);
+
+// After
+const child = await api.getChild(childId);
+const isOrganizationChild = 'organizationId' in child;
+```
+
+**Pattern 4: Form Validation**
+```typescript
+// Before
+if (!form.childId) {
+  errors.childId = 'Child is required';
+}
+
+// After
+if (!form.childId) {
+  errors.childId = 'Child is required';
+}
+if (!form.childType) {
+  errors.childType = 'Child type is required';
+}
+```
 
 ---
 

@@ -4,7 +4,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { In, Repository } from 'typeorm';
+import { In, Repository, IsNull } from 'typeorm';
 import { Evaluation } from './entities/evaluation.entity';
 import { EvaluationAttempt } from './entities/evaluation-attempt.entity';
 import { OrganizationChild } from 'src/children/entities/organization-child.entity';
@@ -75,7 +75,7 @@ export class OwnerEvaluationResultsService {
     });
 
     const evaluations = await this.evaluationRepo.find({
-      where: { institutionId: organizationId },
+      where: [{ institutionId: organizationId }, { institutionId: IsNull() }],
       order: { title: 'ASC' },
     });
 
@@ -105,10 +105,16 @@ export class OwnerEvaluationResultsService {
 
     const evaluation = filters.evaluationId
       ? await this.evaluationRepo.findOne({
-          where: {
-            id: filters.evaluationId,
-            institutionId: organizationId,
-          },
+          where: [
+            {
+              id: filters.evaluationId,
+              institutionId: organizationId,
+            },
+            {
+              id: filters.evaluationId,
+              institutionId: IsNull(),
+            },
+          ],
         })
       : null;
 
@@ -136,7 +142,12 @@ export class OwnerEvaluationResultsService {
     const attempts = childIds.length
       ? await this.attemptRepo.find({
           where: [
-            { organizationChildId: In(childIds), ...(filters.evaluationId ? { evaluationId: filters.evaluationId } : {}) },
+            {
+              organizationChildId: In(childIds),
+              ...(filters.evaluationId
+                ? { evaluationId: filters.evaluationId }
+                : {}),
+            },
           ],
         })
       : [];
@@ -198,10 +209,16 @@ export class OwnerEvaluationResultsService {
     }
 
     const evaluation = await this.evaluationRepo.findOne({
-      where: {
-        id: evaluationId,
-        institutionId: organizationId,
-      },
+      where: [
+        {
+          id: evaluationId,
+          institutionId: organizationId,
+        },
+        {
+          id: evaluationId,
+          institutionId: IsNull(),
+        },
+      ],
     });
 
     if (!evaluation) {
@@ -325,10 +342,16 @@ export class OwnerEvaluationResultsService {
     }
 
     const evaluation = await this.evaluationRepo.findOne({
-      where: {
-        id: evaluationId,
-        institutionId: organizationId,
-      },
+      where: [
+        {
+          id: evaluationId,
+          institutionId: organizationId,
+        },
+        {
+          id: evaluationId,
+          institutionId: IsNull(),
+        },
+      ],
     });
 
     if (!evaluation) {

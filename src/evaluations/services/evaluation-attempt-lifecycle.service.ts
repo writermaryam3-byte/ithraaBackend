@@ -91,6 +91,7 @@ export class EvaluationAttemptLifecycleService {
 
     if (
       !isPrivateChild &&
+      evaluation.institutionId != null &&
       evaluation.institutionId !== (child as OrganizationChild).class?.organization?.id
     ) {
       throw new ForbiddenException(

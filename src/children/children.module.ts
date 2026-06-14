@@ -16,8 +16,6 @@ import { EvaluationsModule } from 'src/evaluations/evaluations.module';
 import { TransferService } from './transfer.service';
 import { TransfersController } from './transfers.controller';
 import { ChildAccessPolicy } from './services/child-access-policy.service';
-import { AuditLog } from 'src/common/entities/audit-log.entity';
-import { AuditLoggingService } from 'src/common/services/audit-logging.service';
 import { TransferAccessPolicy } from './policies/transfer-access.policy';
 
 @Module({
@@ -31,7 +29,6 @@ import { TransferAccessPolicy } from './policies/transfer-access.policy';
     TransferService,
     TransferAccessPolicy,
     ChildAccessPolicy,
-    AuditLoggingService,
   ],
   imports: [
     TypeOrmModule.forFeature([
@@ -40,7 +37,6 @@ import { TransferAccessPolicy } from './policies/transfer-access.policy';
       ChildProfile,
       ChildReport,
       TransferRequest,
-      AuditLog,
     ]),
     OrganizationsModule,
     forwardRef(() => ClassesModule),
