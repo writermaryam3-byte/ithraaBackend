@@ -1,6 +1,7 @@
 import { ForbiddenException, Injectable } from '@nestjs/common';
 import { UserRole } from 'src/common/enums/role.enum';
 import { EvaluationAttempt } from '../entities/evaluation-attempt.entity';
+import { resolveChild } from 'src/common/helpers/child-resolver.helper';
 
 export type EvaluationActor = { userId: string; roles: UserRole[] };
 
@@ -13,7 +14,7 @@ export class EvaluationAccessPolicy {
   }
 
   assertParentOwnership(attempt: EvaluationAttempt, actor: EvaluationActor) {
-    if (attempt.parentId !== actor.userId) {
+    if (attempt.parent?.userId !== actor.userId) {
       throw new ForbiddenException('Attempt not owned by this parent');
     }
   }
@@ -26,7 +27,8 @@ export class EvaluationAccessPolicy {
       return;
     }
 
-    const childClass = attempt.child?.class;
+    const child = resolveChild(attempt);
+    const childClass = child && 'class' in child ? child.class : undefined;
 
     if (!childClass) {
       throw new ForbiddenException('Private child attempt is not accessible');

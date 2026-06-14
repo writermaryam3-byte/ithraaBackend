@@ -8,7 +8,8 @@ import {
 import { InjectRepository } from '@nestjs/typeorm';
 import { EventEmitter2 } from 'eventemitter2';
 import { DataSource, Repository } from 'typeorm';
-import { Child } from 'src/children/entities/child.entity';
+import { OrganizationChild } from 'src/children/entities/organization-child.entity';
+import { PrivateChild } from 'src/children/entities/private-child.entity';
 import { UserRole } from 'src/common/enums/role.enum';
 import { StartEvaluationDto } from '../dto/start-evaluation.dto';
 import { Evaluation } from '../entities/evaluation.entity';
@@ -20,6 +21,8 @@ import {
   EvaluationActor,
 } from './evaluation-access-policy.service';
 import { EvaluationSlotService } from './evaluation-slot.service';
+import { ParentProfilesService } from 'src/users/services/parent-profiles.service';
+import { resolveChild, getChildId, getChildType } from 'src/common/helpers/child-resolver.helper';
 
 @Injectable()
 export class EvaluationAttemptLifecycleService {
@@ -30,8 +33,11 @@ export class EvaluationAttemptLifecycleService {
     private readonly slots: EvaluationSlotService,
     @InjectRepository(Evaluation)
     private readonly evaluations: Repository<Evaluation>,
-    @InjectRepository(Child)
-    private readonly children: Repository<Child>,
+    @InjectRepository(OrganizationChild)
+    private readonly organizationChildren: Repository<OrganizationChild>,
+    @InjectRepository(PrivateChild)
+    private readonly privateChildren: Repository<PrivateChild>,
+    private readonly parentProfilesService: ParentProfilesService,
   ) {}
 
   async startEvaluation(
@@ -49,20 +55,43 @@ export class EvaluationAttemptLifecycleService {
       throw new NotFoundException('Evaluation not found');
     }
 
-    const child = await this.children.findOne({
-      where: { id: dto.childId, parent: { id: actor.userId } },
-      relations: { parent: true, class: { organization: true } },
-    });
-
-    if (!child) {
-      throw new ForbiddenException('Child not found for this parent');
+    const parentProfile = await this.parentProfilesService.findByUserId(
+      actor.userId,
+    );
+    if (!parentProfile) {
+      throw new ForbiddenException('Parent profile not found for user');
     }
 
-    const isPrivateChild = child.class == null;
+    let child: OrganizationChild | PrivateChild;
+    let isPrivateChild: boolean;
+    
+    // Try to find as private child first
+    const privateChild = await this.privateChildren.findOne({
+      where: { id: dto.childId, parent: { id: parentProfile.id } },
+      relations: { parent: true },
+    });
+    
+    if (privateChild) {
+      child = privateChild;
+      isPrivateChild = true;
+    } else {
+      // Try to find as organization child
+      const orgChild = await this.organizationChildren.findOne({
+        where: { id: dto.childId },
+        relations: { parent: true, class: { organization: true } },
+      });
+      
+      if (!orgChild || orgChild.parent.id !== parentProfile.id) {
+        throw new ForbiddenException('Child not found for this parent');
+      }
+      
+      child = orgChild;
+      isPrivateChild = false;
+    }
 
     if (
       !isPrivateChild &&
-      evaluation.institutionId !== child.class?.organization?.id
+      evaluation.institutionId !== (child as OrganizationChild).class?.organization?.id
     ) {
       throw new ForbiddenException(
         'Evaluation does not belong to child institution',
@@ -91,12 +120,19 @@ export class EvaluationAttemptLifecycleService {
     const attempt = await this.dataSource.transaction(async (manager) => {
       const repo = manager.getRepository(EvaluationAttempt);
 
+      const whereClause: any = {
+        evaluationId,
+        parentId: parentProfile.id,
+      };
+      
+      if (isPrivateChild) {
+        whereClause.privateChildId = dto.childId;
+      } else {
+        whereClause.organizationChildId = dto.childId;
+      }
+      
       const attempts = await repo.find({
-        where: {
-          evaluationId,
-          parentId: actor.userId,
-          childId: dto.childId,
-        },
+        where: whereClause,
         order: { attemptNumber: 'DESC' },
         lock: { mode: 'pessimistic_write' },
       });
@@ -118,7 +154,7 @@ export class EvaluationAttemptLifecycleService {
       if (last?.status === EvaluationAttemptStatus.APPROVED) {
         limitReachedPayload = {
           evaluationId,
-          parentId: actor.userId,
+          parentId: parentProfile.id,
           childId: dto.childId,
           attempts: count,
           reason: 'already_approved',
@@ -132,7 +168,7 @@ export class EvaluationAttemptLifecycleService {
         const entitlement = await this.slots.findEntitlementForNext(
           manager,
           dto.childId,
-          actor.userId,
+          parentProfile.id,
         );
 
         if (!entitlement) {
@@ -145,7 +181,7 @@ export class EvaluationAttemptLifecycleService {
       } else if (count >= 2) {
         limitReachedPayload = {
           evaluationId,
-          parentId: actor.userId,
+          parentId: parentProfile.id,
           childId: dto.childId,
           attempts: count,
           reason: 'max_attempts',
@@ -153,19 +189,24 @@ export class EvaluationAttemptLifecycleService {
         throw new ConflictException('Maximum attempts reached');
       }
 
-      const saved = await repo.save(
-        repo.create({
-          evaluationId,
-          parentId: actor.userId,
-          childId: dto.childId,
-          attemptNumber: count + 1,
-          status: EvaluationAttemptStatus.IN_PROGRESS,
-          expiresAt,
-          score: null,
-          result: null,
-          submittedAt: null,
-        }),
-      );
+      const createData: any = {
+        evaluationId,
+        parentId: parentProfile.id,
+        attemptNumber: count + 1,
+        status: EvaluationAttemptStatus.IN_PROGRESS,
+        expiresAt,
+        score: null,
+        result: null,
+        submittedAt: null,
+      };
+      
+      if (isPrivateChild) {
+        createData.privateChildId = dto.childId;
+      } else {
+        createData.organizationChildId = dto.childId;
+      }
+      
+      const saved = await repo.save(repo.create(createData)) as unknown as EvaluationAttempt;
 
       if (isPrivateChild && entitlementId) {
         await this.slots.linkEvaluationToEntitlement(

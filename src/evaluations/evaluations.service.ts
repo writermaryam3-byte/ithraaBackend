@@ -6,7 +6,6 @@ import {
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { DataSource, FindOptionsWhere, Repository } from 'typeorm';
-import { Child } from 'src/children/entities/child.entity';
 import { UserRole } from 'src/common/enums/role.enum';
 import { CreateEvaluationDto } from './dto/create-evaluation.dto';
 import { SaveProgressDto } from './dto/save-progress.dto';
@@ -26,6 +25,9 @@ import { EvaluationApprovalService } from './services/evaluation-approval.servic
 import { EvaluationAttemptLifecycleService } from './services/evaluation-attempt-lifecycle.service';
 import { EvaluationProgressService } from './services/evaluation-progress.service';
 import { EvaluationSubmissionService } from './services/evaluation-submission.service';
+import { ParentProfilesService } from 'src/users/services/parent-profiles.service';
+import { OrganizationChild } from 'src/children/entities/organization-child.entity';
+import { PrivateChild } from 'src/children/entities/private-child.entity';
 
 @Injectable()
 export class EvaluationsService {
@@ -51,9 +53,11 @@ export class EvaluationsService {
 
     @InjectRepository(EvaluationDimension)
     private readonly dimensionRepo: Repository<EvaluationDimension>,
-
-    @InjectRepository(Child)
-    private readonly childRepo: Repository<Child>,
+    private readonly parentProfilesService: ParentProfilesService,
+    @InjectRepository(OrganizationChild)
+    private readonly organizationChildrenRepository: Repository<OrganizationChild>,
+    @InjectRepository(PrivateChild)
+    private readonly privateChildrenRepository: Repository<PrivateChild>,
   ) {}
 
   async createEvaluation(dto: CreateEvaluationDto, actor: EvaluationActor) {
@@ -254,39 +258,55 @@ export class EvaluationsService {
   ) {
     this.access.assertHasRole(actor, [UserRole.PARENT]);
 
-    const child = await this.childRepo.findOne({
-      where: { id: childId, parent: { id: actor.userId } },
+    const parentProfile = await this.parentProfilesService.findByUserId(
+      actor.userId,
+    );
+    if (!parentProfile) throw new ForbiddenException('Parent profile not found');
+
+    // Try to find as private child first
+    const privateChild = await this.privateChildrenRepository.findOne({
+      where: { id: childId, parent: { id: parentProfile.id } },
+      relations: { parent: true },
+    });
+
+    if (privateChild) {
+      const age = this.calculateAge(privateChild.birthDate);
+      const evaluations = await this.evalRepo
+        .createQueryBuilder('evaluation')
+        .where('(evaluation.ageFrom IS NULL OR evaluation.ageFrom <= :age)', { age })
+        .andWhere('(evaluation.ageTo IS NULL OR evaluation.ageTo >= :age)', { age })
+        .orderBy('evaluation.title', 'ASC')
+        .getMany();
+
+      return { childId, age, evaluations };
+    }
+
+    // Try organization child
+    const orgChild = await this.organizationChildrenRepository.findOne({
+      where: { id: childId, parent: { id: parentProfile.id } },
       relations: { parent: true, class: { organization: true } },
     });
 
-    if (!child) {
+    if (!orgChild) {
       throw new ForbiddenException('Child not found for this parent');
     }
 
-    const age = this.calculateAge(child.birthDate);
+    const age = this.calculateAge(orgChild.birthDate);
 
     const qb = this.evalRepo
       .createQueryBuilder('evaluation')
-      .where('(evaluation.ageFrom IS NULL OR evaluation.ageFrom <= :age)', {
-        age,
-      })
-      .andWhere('(evaluation.ageTo IS NULL OR evaluation.ageTo >= :age)', {
-        age,
-      });
+      .where('(evaluation.ageFrom IS NULL OR evaluation.ageFrom <= :age)', { age })
+      .andWhere('(evaluation.ageTo IS NULL OR evaluation.ageTo >= :age)', { age });
 
-    if (child.class) {
+    if (orgChild.class) {
       qb.andWhere('evaluation.institutionId = :institutionId', {
-        institutionId: child.class.organization.id,
+        institutionId: orgChild.class.organization.id,
       });
     }
 
     const evaluations = await qb.orderBy('evaluation.title', 'ASC').getMany();
 
-    return {
-      childId,
-      age,
-      evaluations,
-    };
+    return { childId, age, evaluations };
   }
 
   startEvaluation(
@@ -328,7 +348,7 @@ export class EvaluationsService {
         },
         approval: true,
         evaluation: true,
-        child: {
+        organizationChild: {
           class: {
             organization: {
               owner: true,
@@ -338,6 +358,7 @@ export class EvaluationsService {
             },
           },
         },
+        privateChild: true,
       },
     });
 
@@ -356,7 +377,7 @@ export class EvaluationsService {
           },
           approval: true,
           evaluation: true,
-          child: {
+          organizationChild: {
             class: {
               organization: {
                 owner: true,
@@ -366,6 +387,7 @@ export class EvaluationsService {
               },
             },
           },
+          privateChild: true,
         },
       });
       if (!attempt) throw new NotFoundException('Attempt not found');
@@ -385,16 +407,19 @@ export class EvaluationsService {
   ) {
     this.access.assertHasRole(actor, [UserRole.ADMIN]);
 
-    const where: FindOptionsWhere<EvaluationAttempt> = {};
+    const where: any = {};
 
     if (filters.status) where.status = filters.status;
     if (filters.evaluationId) where.evaluationId = filters.evaluationId;
-    if (filters.childId) where.childId = filters.childId;
+    if (filters.childId) {
+      where.organizationChildId = filters.childId;
+    }
 
     const [attempts, count] = await this.attemptRepo.findAndCount({
       where,
       relations: {
-        child: true,
+        organizationChild: true,
+        privateChild: true,
         parent: true,
         evaluation: true,
         approval: true,
@@ -415,28 +440,52 @@ export class EvaluationsService {
       throw new ForbiddenException('Insufficient role');
     }
 
-    const child = await this.childRepo.findOne({
-      where: isParent
-        ? { id: childId, parent: { id: actor.userId } }
-        : { id: childId },
+    const parentProfile = isParent
+      ? await this.parentProfilesService.findByUserId(actor.userId)
+      : null;
+
+    if (isParent && !parentProfile) throw new ForbiddenException('Parent profile not found');
+
+    const parentProfileId = isParent && parentProfile ? parentProfile.id : undefined;
+
+    // Try private child first
+    const privateChild = await this.privateChildrenRepository.findOne({
+      where: isParent ? { id: childId, parent: { id: parentProfileId } } : { id: childId },
     });
 
-    if (!child) {
+    if (privateChild) {
+      const attemptWhere: any = { privateChildId: childId };
+      if (isParent) {
+        attemptWhere.parentId = parentProfileId;
+      }
+
+      const attempts = await this.attemptRepo.find({
+        where: attemptWhere,
+        relations: { evaluation: true, approval: true },
+        order: { startedAt: 'DESC' },
+      });
+
+      return { attempts, count: attempts.length };
+    }
+
+    // Try organization child
+    const orgChild = await this.organizationChildrenRepository.findOne({
+      where: isParent ? { id: childId, parent: { id: parentProfileId } } : { id: childId },
+    });
+
+    if (!orgChild) {
       throw new NotFoundException('Child not found');
     }
 
+    const attemptWhere: any = { organizationChildId: childId };
+    if (isParent) {
+      attemptWhere.parentId = parentProfileId;
+    }
+
     const attempts = await this.attemptRepo.find({
-      where: {
-        childId,
-        ...(isParent ? { parentId: actor.userId } : {}),
-      },
-      relations: {
-        evaluation: true,
-        approval: true,
-      },
-      order: {
-        startedAt: 'DESC',
-      },
+      where: attemptWhere,
+      relations: { evaluation: true, approval: true },
+      order: { startedAt: 'DESC' },
     });
 
     return { attempts, count: attempts.length };

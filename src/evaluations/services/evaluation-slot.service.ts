@@ -10,13 +10,14 @@ import { ConfigService } from '@nestjs/config';
 import { OnEvent } from '@nestjs/event-emitter';
 import { InjectRepository } from '@nestjs/typeorm';
 import { DataSource, EntityManager, IsNull, Repository } from 'typeorm';
-import { Child } from 'src/children/entities/child.entity';
+import { PrivateChild } from 'src/children/entities/private-child.entity';
 import { NotificationDelivery } from 'src/notifications/enums/notification-delivery.enum';
 import { NotificationsService } from 'src/notifications/notifications.service';
 import { PaymentsService } from 'src/payments/payments.service';
 import type { PaymentSuccessEventPayload } from 'src/payments/payments.events';
 import { PAYMENT_EVENTS } from 'src/payments/payments.events';
 import { AttemptUsageService } from '../attempt-usage.service';
+import { ParentProfilesService } from 'src/users/services/parent-profiles.service';
 import { EvaluationSlot } from '../entities/evaluation-slot.entity';
 import { SlotKind } from '../enums/evaluation-slot-kind.enum';
 import { SlotStatus } from '../enums/evaluation-slot-status.enum';
@@ -25,14 +26,15 @@ import { SlotStatus } from '../enums/evaluation-slot-status.enum';
 export class EvaluationSlotService {
   constructor(
     private readonly dataSource: DataSource,
-    @InjectRepository(Child)
-    private readonly children: Repository<Child>,
+    @InjectRepository(PrivateChild)
+    private readonly privateChildren: Repository<PrivateChild>,
     @InjectRepository(EvaluationSlot)
     private readonly slots: Repository<EvaluationSlot>,
     @Inject(forwardRef(() => PaymentsService))
     private readonly payments: PaymentsService,
     private readonly notifications: NotificationsService,
     private readonly attemptUsageService: AttemptUsageService,
+    private readonly parentProfilesService: ParentProfilesService,
     private readonly config: ConfigService,
   ) {}
 
@@ -44,10 +46,10 @@ export class EvaluationSlotService {
     childId: string,
     parentId: string,
     manager?: EntityManager,
-  ): Promise<Child> {
-    const repo = manager?.getRepository(Child) ?? this.children;
+  ): Promise<PrivateChild> {
+    const repo = manager?.getRepository(PrivateChild) ?? this.privateChildren;
     const child = await repo.findOne({
-      where: { id: childId, parent: { id: parentId }, classId: IsNull() },
+      where: { id: childId, parent: { id: parentId } },
     });
 
     if (!child) {
@@ -79,7 +81,7 @@ export class EvaluationSlotService {
       const repo = manager.getRepository(EvaluationSlot);
       const existing = await repo.findOne({
         where: {
-          childId,
+          privateChildId: childId,
           parentId,
           kind: SlotKind.MAIN,
           evaluationAttemptId: IsNull(),
@@ -94,7 +96,7 @@ export class EvaluationSlotService {
 
       return repo.save(
         repo.create({
-          childId,
+          privateChildId: childId,
           parentId,
           kind: SlotKind.MAIN,
           status: SlotStatus.READY,
@@ -131,7 +133,7 @@ export class EvaluationSlotService {
       const repo = manager.getRepository(EvaluationSlot);
       const open = await repo.findOne({
         where: {
-          childId,
+          privateChildId: childId,
           parentId,
           kind: SlotKind.RETAKE,
           evaluationAttemptId: IsNull(),
@@ -146,7 +148,7 @@ export class EvaluationSlotService {
 
       const saved = await repo.save(
         repo.create({
-          childId,
+          privateChildId: childId,
           parentId,
           kind: SlotKind.RETAKE,
           status: SlotStatus.READY,
@@ -183,7 +185,7 @@ export class EvaluationSlotService {
       const repo = manager.getRepository(EvaluationSlot);
       const pending = await repo.findOne({
         where: {
-          childId,
+          privateChildId: childId,
           parentId,
           kind: SlotKind.EXTRA,
         },
@@ -207,7 +209,7 @@ export class EvaluationSlotService {
 
       const saved = await repo.save(
         repo.create({
-          childId,
+          privateChildId: childId,
           parentId,
           kind: SlotKind.EXTRA,
           status: SlotStatus.REQUESTED,
@@ -229,7 +231,7 @@ export class EvaluationSlotService {
       const repo = manager.getRepository(EvaluationSlot);
       const slot = await repo.findOne({
         where: { id: privateAttemptId },
-        relations: { child: true, parent: true },
+        relations: { privateChild: true, parent: true },
         lock: { mode: 'pessimistic_write' },
       });
 
@@ -246,10 +248,13 @@ export class EvaluationSlotService {
 
       slot.transitionTo(SlotStatus.AWAITING_PAYMENT);
 
-      const checkout = await this.payments.createPaymentForPrivateExtraAttempt(
+      const parentUserId = await this.parentProfilesService.getUserIdForParentProfile(
         slot.parentId,
+      );
+      const checkout = await this.payments.createPaymentForPrivateExtraAttempt(
+        parentUserId,
         {
-          childId: slot.childId,
+          privateChildId: slot.privateChildId!,
           privateAttemptId: slot.id,
           amount: this.extraAttemptPriceSar(),
           description: 'Extra child evaluation attempt',
@@ -260,7 +265,7 @@ export class EvaluationSlotService {
       await repo.save(slot);
       await this.notifyPaymentRequired(
         slot.parentId,
-        slot.child.name,
+        slot.privateChild!.name,
         checkout.checkoutUrl,
         checkout.expiresAt,
       );
@@ -275,7 +280,7 @@ export class EvaluationSlotService {
   async initiateOrRefreshExtraPayment(privateAttemptId: string, parentId: string) {
     const slot = await this.slots.findOne({
       where: { id: privateAttemptId, parentId },
-      relations: { child: true },
+      relations: { privateChild: true },
     });
 
     if (!slot) throw new NotFoundException('Attempt not found');
@@ -286,10 +291,13 @@ export class EvaluationSlotService {
       throw new BadRequestException('No payment record linked to this attempt');
     }
 
-    const refreshed = await this.payments.retryPayment(slot.paymentId, parentId);
+    const parentUserId = await this.parentProfilesService.getUserIdForParentProfile(
+      parentId,
+    );
+    const refreshed = await this.payments.retryPayment(slot.paymentId, parentUserId);
     await this.notifyPaymentRequired(
       parentId,
-      slot.child.name,
+      slot.privateChild!.name,
       refreshed.checkoutUrl,
       refreshed.expiresAt,
     );
@@ -303,7 +311,7 @@ export class EvaluationSlotService {
   ): Promise<EvaluationSlot | null> {
     return manager.getRepository(EvaluationSlot).findOne({
       where: {
-        childId,
+        privateChildId: childId,
         parentId,
         status: SlotStatus.READY,
         evaluationAttemptId: IsNull(),
@@ -338,11 +346,11 @@ export class EvaluationSlotService {
     evaluationAttemptId: string,
     childId: string,
   ): Promise<void> {
-    const child = await manager.getRepository(Child).findOne({
+    const child = await manager.getRepository(PrivateChild).findOne({
       where: { id: childId },
       lock: { mode: 'pessimistic_write' },
     });
-    if (!child || child.classId !== null) return;
+    if (!child) return;
 
     const repo = manager.getRepository(EvaluationSlot);
     const row = await repo.findOne({
@@ -370,7 +378,7 @@ export class EvaluationSlotService {
       const repo = manager.getRepository(EvaluationSlot);
       const row = await repo.findOne({
         where: { id: privateId },
-        relations: { child: true },
+        relations: { privateChild: true },
         lock: { mode: 'pessimistic_write' },
       });
       if (!row) return;
@@ -381,7 +389,7 @@ export class EvaluationSlotService {
       row.paymentId = payload.paymentId;
       await repo.save(row);
       unlocked = true;
-      childName = row.child.name;
+      childName = row.privateChild?.name || null;
     });
 
     if (!unlocked) return;
@@ -395,9 +403,13 @@ export class EvaluationSlotService {
   }
 
   private async notifyRetakeRequested(parentId: string, childName: string) {
+    const userId = await this.parentProfilesService.getUserIdForParentProfile(
+      parentId,
+    );
+    if (!userId) return;
     await this.notifications.enqueue({
       delivery: NotificationDelivery.IN_APP,
-      userId: parentId,
+      userId,
       title: 'Retake requested',
       message: `A retake has been opened for ${childName}. You can start the evaluation when ready.`,
     });
@@ -408,9 +420,13 @@ export class EvaluationSlotService {
     childName: string,
     requestId: string,
   ) {
+    const userId = await this.parentProfilesService.getUserIdForParentProfile(
+      parentId,
+    );
+    if (!userId) return;
     await this.notifications.enqueue({
       delivery: NotificationDelivery.IN_APP,
-      userId: parentId,
+      userId,
       title: 'Extra attempt requested',
       message: `An extra evaluation attempt was requested for ${childName} (ref ${requestId}). Awaiting admin approval.`,
     });
@@ -422,9 +438,13 @@ export class EvaluationSlotService {
     paymentUrl: string,
     expiresAt: Date,
   ) {
+    const userId = await this.parentProfilesService.getUserIdForParentProfile(
+      parentId,
+    );
+    if (!userId) return;
     await this.notifications.enqueue({
       delivery: NotificationDelivery.IN_APP,
-      userId: parentId,
+      userId,
       title: 'Payment required',
       message: `Complete payment for an extra evaluation attempt for ${childName}. Pay here: ${paymentUrl} (expires ${expiresAt.toISOString()}).`,
     });

@@ -1,4 +1,4 @@
-import { User } from 'src/users/entities/user.entity';
+import { ParentProfile } from 'src/users/entities/parent-profile.entity';
 import {
   Entity,
   PrimaryGeneratedColumn,
@@ -9,17 +9,26 @@ import {
   UpdateDateColumn,
   Index,
   OneToOne,
+  BeforeInsert,
+  BeforeUpdate,
 } from 'typeorm';
 import { SlotStatus } from '../enums/evaluation-slot-status.enum';
-import { Child } from 'src/children/entities/child.entity';
+import { OrganizationChild } from 'src/children/entities/organization-child.entity';
+import { PrivateChild } from 'src/children/entities/private-child.entity';
 import { SlotKind } from '../enums/evaluation-slot-kind.enum';
 import { EvaluationAttempt } from './evaluation-attempt.entity';
+import { ensureSingleChildType } from 'src/common/helpers/child-resolver.helper';
 
 @Entity('evaluation_slot')
-@Index('idx_evaluation_slot_child_status', ['childId', 'status'])
-@Index('uq_evaluation_slot_active_kind', ['childId', 'parentId', 'kind'], {
+@Index('idx_evaluation_slot_org_child_status', ['organizationChildId', 'status'])
+@Index('idx_evaluation_slot_private_child_status', ['privateChildId', 'status'])
+@Index('uq_evaluation_slot_org_active_kind', ['organizationChildId', 'parentId', 'kind'], {
   unique: true,
-  where: `"status" IN ('READY', 'REQUESTED', 'AWAITING_PAYMENT', 'CONSUMED')`,
+  where: `"status" IN ('READY', 'REQUESTED', 'AWAITING_PAYMENT', 'CONSUMED') AND "organizationChildId" IS NOT NULL`,
+})
+@Index('uq_evaluation_slot_private_active_kind', ['privateChildId', 'parentId', 'kind'], {
+  unique: true,
+  where: `"status" IN ('READY', 'REQUESTED', 'AWAITING_PAYMENT', 'CONSUMED') AND "privateChildId" IS NOT NULL`,
 })
 @Index('uq_evaluation_slot_attempt', ['evaluationAttemptId'], {
   unique: true,
@@ -30,20 +39,28 @@ export class EvaluationSlot {
   id: string;
 
   @Index()
-  @Column({ type: 'uuid' })
-  childId: string;
+  @Column({ type: 'uuid', nullable: true })
+  organizationChildId: string | null;
 
-  @ManyToOne(() => Child, (c) => c.slots, { onDelete: 'CASCADE' })
-  @JoinColumn({ name: 'childId' })
-  child: Child;
+  @ManyToOne(() => OrganizationChild, (c) => c.slots, { onDelete: 'CASCADE', nullable: true })
+  @JoinColumn({ name: 'organizationChildId' })
+  organizationChild: OrganizationChild | null;
+
+  @Index()
+  @Column({ type: 'uuid', nullable: true })
+  privateChildId: string | null;
+
+  @ManyToOne(() => PrivateChild, (c) => c.slots, { onDelete: 'CASCADE', nullable: true })
+  @JoinColumn({ name: 'privateChildId' })
+  privateChild: PrivateChild | null;
 
   @Index()
   @Column({ type: 'uuid' })
   parentId: string;
 
-  @ManyToOne(() => User, { onDelete: 'CASCADE' })
+  @ManyToOne(() => ParentProfile, { onDelete: 'CASCADE' })
   @JoinColumn({ name: 'parentId' })
-  parent: User;
+  parent: ParentProfile;
 
   @Column({ type: 'enum', enum: SlotKind })
   kind: SlotKind;
@@ -92,5 +109,11 @@ export class EvaluationSlot {
     }
 
     this.status = next;
+  }
+
+  @BeforeInsert()
+  @BeforeUpdate()
+  validateChildType() {
+    ensureSingleChildType(this.organizationChildId, this.privateChildId);
   }
 }

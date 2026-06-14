@@ -1,6 +1,4 @@
 import { Exclude } from 'class-transformer';
-import { Child } from 'src/children/entities/child.entity';
-import { Organization } from 'src/organizations/entities/organization.entity';
 import {
   Entity,
   PrimaryGeneratedColumn,
@@ -16,6 +14,10 @@ import {
 import { Role } from './user-roles.entity';
 import { Enricher } from './enricher.entity';
 import { Teacher } from './teacher.entity';
+import { ParentProfile } from './parent-profile.entity';
+import { OrganizationChild } from '../../children/entities/organization-child.entity';
+import { PrivateChild } from '../../children/entities/private-child.entity';
+import { Organization } from '../../organizations/entities/organization.entity';
 
 @Entity('users')
 export class User {
@@ -66,11 +68,16 @@ export class User {
   @OneToOne(() => Teacher, (teacher) => teacher.user)
   teacher: Teacher;
 
-  @OneToMany(() => Child, (child) => child.createdBy)
-  children: Child[];
+  @OneToMany(() => OrganizationChild, (child) => child.createdBy)
+  organizationChildren: OrganizationChild[];
 
-  @OneToMany(() => Child, (child) => child.parent)
-  parentChildren: Child[];
+  @OneToMany(() => PrivateChild, (child) => child.createdBy)
+  privateChildren: PrivateChild[];
+
+  @OneToOne(() => ParentProfile, (profile) => profile.user, {
+    nullable: true,
+  })
+  parentProfile: ParentProfile;
 
   @CreateDateColumn()
   createdAt: Date;

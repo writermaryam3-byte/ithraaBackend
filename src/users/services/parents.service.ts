@@ -15,7 +15,9 @@ export class ParentsServices {
     const parent = await this.userRepo
       .createQueryBuilder('user')
       .leftJoinAndSelect('user.roles', 'role')
-      .leftJoinAndSelect('user.children', 'child')
+      .leftJoinAndSelect('user.parentProfile', 'parentProfile')
+      .leftJoinAndSelect('parentProfile.organizationChildren', 'orgChild')
+      .leftJoinAndSelect('parentProfile.privateChildren', 'privateChild')
       .where('user.phone = :phone', { phone })
       .andWhere('role.name = :role', {
         role: UserRole.PARENT,
@@ -28,11 +30,19 @@ export class ParentsServices {
       };
     }
 
-    const { children, ...parentInfo } = parent;
+    const { parentProfile, ...parentInfo } = parent;
+
+    const children = [
+      ...(parentProfile?.organizationChildren || []),
+      ...(parentProfile?.privateChildren || []),
+    ];
 
     return {
-      parent: parentInfo,
-      children: children ?? [],
+      parent: {
+        ...parentInfo,
+        parentProfileId: parentProfile?.id ?? null,
+      },
+      children,
     };
   }
 }

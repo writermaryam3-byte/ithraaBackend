@@ -7,13 +7,15 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { In, Repository } from 'typeorm';
 import { Evaluation } from './entities/evaluation.entity';
 import { EvaluationAttempt } from './entities/evaluation-attempt.entity';
-import { Child } from 'src/children/entities/child.entity';
+import { OrganizationChild } from 'src/children/entities/organization-child.entity';
+import { PrivateChild } from 'src/children/entities/private-child.entity';
 import { Class } from 'src/classes/entities/class.entity';
 import { Organization } from 'src/organizations/entities/organization.entity';
 import { UserRole } from 'src/common/enums/role.enum';
 import { EvaluationAttemptStatus } from './enums/evaluation-attempt-status.enum';
 import { NotificationsService } from 'src/notifications/notifications.service';
 import { NotificationDelivery } from 'src/notifications/enums/notification-delivery.enum';
+import { getChildId } from 'src/common/helpers/child-resolver.helper';
 
 type Actor = {
   userId: string;
@@ -49,8 +51,11 @@ export class OwnerEvaluationResultsService {
     @InjectRepository(Class)
     private readonly classRepo: Repository<Class>,
 
-    @InjectRepository(Child)
-    private readonly childRepo: Repository<Child>,
+    @InjectRepository(OrganizationChild)
+    private readonly orgChildRepo: Repository<OrganizationChild>,
+
+    @InjectRepository(PrivateChild)
+    private readonly privateChildRepo: Repository<PrivateChild>,
 
     @InjectRepository(Evaluation)
     private readonly evaluationRepo: Repository<Evaluation>,
@@ -113,7 +118,7 @@ export class OwnerEvaluationResultsService {
 
     const classIds = classes.map((cls) => cls.id);
 
-    const children = await this.childRepo.find({
+    const children = await this.orgChildRepo.find({
       where: {
         class: {
           id: In(
@@ -130,12 +135,9 @@ export class OwnerEvaluationResultsService {
 
     const attempts = childIds.length
       ? await this.attemptRepo.find({
-          where: {
-            childId: In(childIds),
-            ...(filters.evaluationId
-              ? { evaluationId: filters.evaluationId }
-              : {}),
-          },
+          where: [
+            { organizationChildId: In(childIds), ...(filters.evaluationId ? { evaluationId: filters.evaluationId } : {}) },
+          ],
         })
       : [];
 
@@ -146,7 +148,8 @@ export class OwnerEvaluationResultsService {
             attempt.status === EvaluationAttemptStatus.SUBMITTED ||
             attempt.status === EvaluationAttemptStatus.APPROVED,
         )
-        .map((attempt) => attempt.childId),
+        .map((attempt) => getChildId(attempt))
+        .filter((id): id is string => id !== null),
     );
 
     return {
@@ -218,12 +221,13 @@ export class OwnerEvaluationResultsService {
     }
 
     const attempts = await this.attemptRepo.find({
-      where: {
-        childId: In(childIds),
-        evaluationId,
-      },
+      where: [
+        { organizationChildId: In(childIds), evaluationId },
+        { privateChildId: In(childIds), evaluationId },
+      ],
       relations: {
-        child: true,
+        organizationChild: true,
+        privateChild: true,
         evaluation: true,
       },
       order: {
@@ -280,7 +284,7 @@ export class OwnerEvaluationResultsService {
         const topDimension = this.getTopDimensionFromAttempt(attempt);
 
         return {
-          childId: child.id,
+          organizationChildId: child.id,
           childName: child.name,
           className: cls.name,
           status: this.resolveAttemptStatus(attempt),
@@ -337,7 +341,7 @@ export class OwnerEvaluationResultsService {
     const attempts = childIds.length
       ? await this.attemptRepo.find({
           where: {
-            childId: In(childIds),
+            organizationChildId: In(childIds),
             evaluationId,
           },
           order: {
@@ -359,7 +363,7 @@ export class OwnerEvaluationResultsService {
         const status = this.resolveAttemptStatus(attempt);
 
         return {
-          childId: child.id,
+          organizationChildId: child.id,
           childName: child.name,
           className: cls.name,
           status,
@@ -376,7 +380,7 @@ export class OwnerEvaluationResultsService {
   async sendReminder(childId: string, actor: Actor) {
     const organizationId = await this.resolveOrganizationId(actor);
 
-    const child = await this.childRepo.findOne({
+    const child = await this.orgChildRepo.findOne({
       where: {
         id: childId,
         class: { organization: { id: organizationId } },
@@ -397,7 +401,7 @@ export class OwnerEvaluationResultsService {
 
     await this.notificationsService.enqueue({
       delivery: NotificationDelivery.IN_APP,
-      userId: child.parent.id,
+      userId: child.parent.userId,
       title: 'تذكير بالتقييم',
       message: `برجاء استكمال تقييم الطفل ${child.name}.`,
       type: 'evaluation_reminder',
@@ -467,8 +471,9 @@ export class OwnerEvaluationResultsService {
     const map = new Map<string, EvaluationAttempt>();
 
     for (const attempt of attempts) {
-      if (!map.has(attempt.childId)) {
-        map.set(attempt.childId, attempt);
+      const childId = getChildId(attempt);
+      if (childId && !map.has(childId)) {
+        map.set(childId, attempt);
       }
     }
 

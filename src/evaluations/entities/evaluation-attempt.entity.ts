@@ -9,26 +9,41 @@ import {
   CreateDateColumn,
   Index,
   Unique,
+  BeforeInsert,
+  BeforeUpdate,
 } from 'typeorm';
 import { Evaluation } from './evaluation.entity';
-import { User } from 'src/users/entities/user.entity';
-import { Child } from 'src/children/entities/child.entity';
+import { ParentProfile } from 'src/users/entities/parent-profile.entity';
+import { OrganizationChild } from 'src/children/entities/organization-child.entity';
+import { PrivateChild } from 'src/children/entities/private-child.entity';
 import { EvaluationAttemptStatus } from '../enums/evaluation-attempt-status.enum';
 import { EvaluationAnswer } from './evaluation-answer.entity';
 import { EvaluationApproval } from './evaluation-approval.entity';
 import { EvaluationSlot } from './evaluation-slot.entity';
+import { ensureSingleChildType } from 'src/common/helpers/child-resolver.helper';
 
 @Entity('evaluation_attempts')
-@Unique('uq_eval_attempt_number', [
+@Unique('uq_eval_attempt_org_number', [
   'evaluationId',
   'parentId',
-  'childId',
+  'organizationChildId',
   'attemptNumber',
 ])
-@Index('idx_eval_attempt_lookup', ['evaluationId', 'parentId', 'childId'])
-@Index('uq_eval_attempt_in_progress', ['evaluationId', 'parentId', 'childId'], {
+@Unique('uq_eval_attempt_private_number', [
+  'evaluationId',
+  'parentId',
+  'privateChildId',
+  'attemptNumber',
+])
+@Index('idx_eval_attempt_org_lookup', ['evaluationId', 'parentId', 'organizationChildId'])
+@Index('idx_eval_attempt_private_lookup', ['evaluationId', 'parentId', 'privateChildId'])
+@Index('uq_eval_attempt_org_in_progress', ['evaluationId', 'parentId', 'organizationChildId'], {
   unique: true,
-  where: `"status" = 'in_progress'`,
+  where: `"status" = 'in_progress' AND "organizationChildId" IS NOT NULL`,
+})
+@Index('uq_eval_attempt_private_in_progress', ['evaluationId', 'parentId', 'privateChildId'], {
+  unique: true,
+  where: `"status" = 'in_progress' AND "privateChildId" IS NOT NULL`,
 })
 export class EvaluationAttempt {
   @PrimaryGeneratedColumn('uuid')
@@ -38,17 +53,25 @@ export class EvaluationAttempt {
   @Column({ type: 'uuid' })
   parentId: string;
 
-  @ManyToOne(() => User, { onDelete: 'CASCADE' })
+  @ManyToOne(() => ParentProfile, { onDelete: 'CASCADE' })
   @JoinColumn({ name: 'parentId' })
-  parent: User;
+  parent: ParentProfile;
 
   @Index()
-  @Column({ type: 'uuid' })
-  childId: string;
+  @Column({ type: 'uuid', nullable: true })
+  organizationChildId: string | null;
 
-  @ManyToOne(() => Child, { onDelete: 'CASCADE' })
-  @JoinColumn({ name: 'childId' })
-  child: Child;
+  @ManyToOne(() => OrganizationChild, { onDelete: 'CASCADE', nullable: true })
+  @JoinColumn({ name: 'organizationChildId' })
+  organizationChild: OrganizationChild | null;
+
+  @Index()
+  @Column({ type: 'uuid', nullable: true })
+  privateChildId: string | null;
+
+  @ManyToOne(() => PrivateChild, { onDelete: 'CASCADE', nullable: true })
+  @JoinColumn({ name: 'privateChildId' })
+  privateChild: PrivateChild | null;
 
   @Index()
   @Column({ type: 'uuid' })
@@ -87,4 +110,10 @@ export class EvaluationAttempt {
 
   @OneToOne(() => EvaluationSlot, (slot) => slot.evaluationAttempt)
   slot: EvaluationSlot;
+
+  @BeforeInsert()
+  @BeforeUpdate()
+  validateChildType() {
+    ensureSingleChildType(this.organizationChildId, this.privateChildId);
+  }
 }
