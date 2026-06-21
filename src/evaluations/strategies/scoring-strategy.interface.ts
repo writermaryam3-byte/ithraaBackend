@@ -9,7 +9,15 @@ export interface DimensionScore {
   interpretation: string;
 }
 
-export interface EvaluationResult {
+export interface PreschoolDimensionResult {
+  code: string;
+  name: string;
+  questionCount: number;
+  totalScore: number;
+  averageScore: number;
+}
+
+export interface StandardEvaluationResult {
   totalScore: number;
   maxTotalScore: number;
   overallPercentage: number;
@@ -18,6 +26,16 @@ export interface EvaluationResult {
   interpretation: string;
   recommendations: string[];
 }
+
+export interface PreschoolEvaluationResult {
+  totalScore: number;
+  averageScore: number;
+  giftedIndicator: boolean;
+  level: 'LOW' | 'MEDIUM' | 'HIGH';
+  dimensions: PreschoolDimensionResult[];
+}
+
+export type EvaluationResult = StandardEvaluationResult | PreschoolEvaluationResult;
 
 export interface ScoringStrategy {
   calculate(attempt: EvaluationAttempt): Promise<EvaluationResult>;

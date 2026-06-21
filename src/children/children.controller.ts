@@ -69,7 +69,12 @@ export class ChildrenController {
     return this.childrenService.findAllByOrganization(orgId, req.user);
   }
 
-  @Roles(UserRole.ADMIN, UserRole.PARENT, UserRole.ORGANIZATIONOWNER, UserRole.TEACHER)
+  @Roles(
+    UserRole.ADMIN,
+    UserRole.PARENT,
+    UserRole.ORGANIZATIONOWNER,
+    UserRole.TEACHER,
+  )
   @Get(':id')
   @ApiOperation({ summary: 'Get child data' })
   findOne(
@@ -79,7 +84,12 @@ export class ChildrenController {
     return this.childrenService.findOne(id, req.user);
   }
 
-  @Roles(UserRole.PARENT, UserRole.ORGANIZATIONOWNER, UserRole.TEACHER, UserRole.ADMIN)
+  @Roles(
+    UserRole.PARENT,
+    UserRole.ORGANIZATIONOWNER,
+    UserRole.TEACHER,
+    UserRole.ADMIN,
+  )
   @Patch(':id')
   @ApiOperation({ summary: 'Update child' })
   update(
@@ -90,7 +100,12 @@ export class ChildrenController {
     return this.childrenService.update(id, updateChildDto, req.user);
   }
 
-  @Roles(UserRole.PARENT, UserRole.ORGANIZATIONOWNER, UserRole.TEACHER, UserRole.ADMIN)
+  @Roles(
+    UserRole.PARENT,
+    UserRole.ORGANIZATIONOWNER,
+    UserRole.TEACHER,
+    UserRole.ADMIN,
+  )
   @Delete(':id')
   @ApiOperation({ summary: 'Delete child' })
   remove(

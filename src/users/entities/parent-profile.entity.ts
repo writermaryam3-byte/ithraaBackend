@@ -39,10 +39,7 @@ export class ParentProfile {
   @OneToMany(() => PrivateChild, (child) => child.parent)
   privateChildren: PrivateChild[];
 
-  @OneToMany(
-    () => ParentOrganization,
-    (link) => link.parent,
-  )
+  @OneToMany(() => ParentOrganization, (link) => link.parent)
   organizationLinks: ParentOrganization[];
 
   @CreateDateColumn()

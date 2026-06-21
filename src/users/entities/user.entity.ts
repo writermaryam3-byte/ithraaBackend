@@ -9,7 +9,6 @@ import {
   OneToOne,
   ManyToMany,
   JoinTable,
-  ManyToOne,
 } from 'typeorm';
 import { Role } from './user-roles.entity';
 import { Enricher } from './enricher.entity';
@@ -18,6 +17,7 @@ import { ParentProfile } from './parent-profile.entity';
 import { OrganizationChild } from '../../children/entities/organization-child.entity';
 import { PrivateChild } from '../../children/entities/private-child.entity';
 import { Organization } from '../../organizations/entities/organization.entity';
+import { ParentOrganization } from './parent-organization.entity';
 
 @Entity('users')
 export class User {
@@ -53,20 +53,14 @@ export class User {
   @OneToOne(() => Organization, (org) => org.owner)
   ownedOrganization: Organization;
 
-  /**
-   * Organization membership
-   */
-  @ManyToOne(() => Organization, (org) => org.users, {
-    nullable: true,
-    onDelete: 'SET NULL',
-  })
-  organization: Organization;
-
   @OneToOne(() => Enricher, (enricher) => enricher.user)
   enricher: Enricher;
 
   @OneToOne(() => Teacher, (teacher) => teacher.user)
   teacher: Teacher;
+
+  @OneToMany(() => ParentOrganization, (parent) => parent.indexedBy)
+  parentOrganization: ParentOrganization[];
 
   @OneToMany(() => OrganizationChild, (child) => child.createdBy)
   organizationChildren: OrganizationChild[];

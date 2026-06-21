@@ -4,7 +4,6 @@ import { Repository } from 'typeorm';
 import { OrganizationChild } from '../entities/organization-child.entity';
 import { ChildAccessPolicy } from '../policies/child-access.policy';
 import { AuditLoggingService } from 'src/common/services/audit-logging.service';
-import { AuditAction } from 'src/common/enums/audit-action.enum';
 import { Actor } from 'src/common/policies/base-policy.interface';
 
 @Injectable()
@@ -23,7 +22,9 @@ export class OrganizationChildrenService {
     }
 
     const child = this.orgChildRepo.create(dto);
-    const saved = await this.orgChildRepo.save(child) as unknown as OrganizationChild;
+    const saved = (await this.orgChildRepo.save(
+      child,
+    )) as unknown as OrganizationChild;
 
     await this.auditService.logCreate(
       actor.userId,
@@ -41,7 +42,13 @@ export class OrganizationChildrenService {
   async findById(id: string, actor: Actor): Promise<OrganizationChild> {
     const child = await this.orgChildRepo.findOne({
       where: { id },
-      relations: ['parent', 'organization', 'class', 'class.teacher', 'class.teacher.user'],
+      relations: [
+        'parent',
+        'organization',
+        'class',
+        'class.teacher',
+        'class.teacher.user',
+      ],
     });
 
     if (!child) {
@@ -94,8 +101,14 @@ export class OrganizationChildrenService {
     );
   }
 
-  async findByOrganization(organizationId: string, actor: Actor): Promise<OrganizationChild[]> {
-    const policyResult = this.childAccessPolicy.canListOrganizationChildren(actor, organizationId);
+  async findByOrganization(
+    organizationId: string,
+    actor: Actor,
+  ): Promise<OrganizationChild[]> {
+    const policyResult = this.childAccessPolicy.canListOrganizationChildren(
+      actor,
+      organizationId,
+    );
     if (!policyResult.allowed) {
       throw new Error(policyResult.reason);
     }
@@ -106,7 +119,7 @@ export class OrganizationChildrenService {
     });
   }
 
-  async findByClass(classId: string, actor: Actor): Promise<OrganizationChild[]> {
+  async findByClass(classId: string): Promise<OrganizationChild[]> {
     return this.orgChildRepo.find({
       where: { classId },
       relations: ['parent', 'class'],

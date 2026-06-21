@@ -59,16 +59,18 @@ export class EvaluationSlotService {
     return child;
   }
 
-  async startMainSlot(childId: string, parentId: string) {
+  async startMainSlot(childId: string, parentUserId: string) {
     return this.dataSource.transaction(async (manager) => {
+      const parentProfile =
+        await this.parentProfilesService.findByUserId(parentUserId);
       const child = await this.loadPrivateChildOrThrow(
         childId,
-        parentId,
+        parentProfile.id,
         manager,
       );
       const usage = await this.attemptUsageService.getUsage(
         child.id,
-        parentId,
+        parentProfile.id,
         manager,
       );
 
@@ -82,7 +84,7 @@ export class EvaluationSlotService {
       const existing = await repo.findOne({
         where: {
           privateChildId: childId,
-          parentId,
+          parentId: parentProfile.id,
           kind: SlotKind.MAIN,
           evaluationAttemptId: IsNull(),
         },
@@ -97,7 +99,7 @@ export class EvaluationSlotService {
       return repo.save(
         repo.create({
           privateChildId: childId,
-          parentId,
+          parentId: parentProfile.id,
           kind: SlotKind.MAIN,
           status: SlotStatus.READY,
           isPaid: false,
@@ -109,21 +111,25 @@ export class EvaluationSlotService {
     });
   }
 
-  async requestRetake(childId: string, parentId: string) {
+  async requestRetake(childId: string, parentUserId: string) {
     return this.dataSource.transaction(async (manager) => {
+      const parentProfile =
+        await this.parentProfilesService.findByUserId(parentUserId);
       const child = await this.loadPrivateChildOrThrow(
         childId,
-        parentId,
+        parentProfile.id,
         manager,
       );
       const usage = await this.attemptUsageService.getUsage(
         childId,
-        parentId,
+        parentProfile.id,
         manager,
       );
 
       if (usage.totalAttempts < 1) {
-        throw new BadRequestException('Complete the main attempt before retake');
+        throw new BadRequestException(
+          'Complete the main attempt before retake',
+        );
       }
 
       if (usage.hasRetake) {
@@ -134,7 +140,7 @@ export class EvaluationSlotService {
       const open = await repo.findOne({
         where: {
           privateChildId: childId,
-          parentId,
+          parentId: parentProfile.id,
           kind: SlotKind.RETAKE,
           evaluationAttemptId: IsNull(),
         },
@@ -142,14 +148,14 @@ export class EvaluationSlotService {
       });
 
       if (open && open.status !== SlotStatus.COMPLETED) {
-        await this.notifyRetakeRequested(parentId, child.name);
+        await this.notifyRetakeRequested(parentProfile.id, child.name);
         return open;
       }
 
       const saved = await repo.save(
         repo.create({
           privateChildId: childId,
-          parentId,
+          parentId: parentProfile.id,
           kind: SlotKind.RETAKE,
           status: SlotStatus.READY,
           isPaid: false,
@@ -158,21 +164,23 @@ export class EvaluationSlotService {
           paymentId: null,
         }),
       );
-      await this.notifyRetakeRequested(parentId, child.name);
+      await this.notifyRetakeRequested(parentProfile.id, child.name);
       return saved;
     });
   }
 
-  async requestExtraAttempt(childId: string, parentId: string) {
+  async requestExtraAttempt(childId: string, parentUserId: string) {
     return this.dataSource.transaction(async (manager) => {
+      const parentProfile =
+        await this.parentProfilesService.findByUserId(parentUserId);
       const child = await this.loadPrivateChildOrThrow(
         childId,
-        parentId,
+        parentProfile.id,
         manager,
       );
       const usage = await this.attemptUsageService.getUsage(
         childId,
-        parentId,
+        parentProfile.id,
         manager,
       );
 
@@ -186,7 +194,7 @@ export class EvaluationSlotService {
       const pending = await repo.findOne({
         where: {
           privateChildId: childId,
-          parentId,
+          parentId: parentProfile.id,
           kind: SlotKind.EXTRA,
         },
         order: { createdAt: 'DESC' },
@@ -204,13 +212,15 @@ export class EvaluationSlotService {
       }
 
       if (pending && pending.status === SlotStatus.REQUESTED) {
-        throw new BadRequestException('Extra attempt already awaiting approval');
+        throw new BadRequestException(
+          'Extra attempt already awaiting approval',
+        );
       }
 
       const saved = await repo.save(
         repo.create({
           privateChildId: childId,
-          parentId,
+          parentId: parentProfile.id,
           kind: SlotKind.EXTRA,
           status: SlotStatus.REQUESTED,
           isPaid: false,
@@ -219,12 +229,15 @@ export class EvaluationSlotService {
           paymentId: null,
         }),
       );
-      await this.notifyExtraRequested(parentId, child.name, saved.id);
+      await this.notifyExtraRequested(parentProfile.id, child.name, saved.id);
       return saved;
     });
   }
 
-  async adminApproveExtraAttempt(privateAttemptId: string, adminUserId: string) {
+  async adminApproveExtraAttempt(
+    privateAttemptId: string,
+    adminUserId: string,
+  ) {
     void adminUserId;
 
     return this.dataSource.transaction(async (manager) => {
@@ -243,14 +256,17 @@ export class EvaluationSlotService {
         throw new BadRequestException('Extra attempt is not awaiting approval');
       }
       if (!slot.requiresApproval) {
-        throw new BadRequestException('Extra attempt does not require approval');
+        throw new BadRequestException(
+          'Extra attempt does not require approval',
+        );
       }
 
       slot.transitionTo(SlotStatus.AWAITING_PAYMENT);
 
-      const parentUserId = await this.parentProfilesService.getUserIdForParentProfile(
-        slot.parentId,
-      );
+      const parentUserId =
+        await this.parentProfilesService.getUserIdForParentProfile(
+          slot.parentId,
+        );
       const checkout = await this.payments.createPaymentForPrivateExtraAttempt(
         parentUserId,
         {
@@ -277,9 +293,14 @@ export class EvaluationSlotService {
     });
   }
 
-  async initiateOrRefreshExtraPayment(privateAttemptId: string, parentId: string) {
+  async initiateOrRefreshExtraPayment(
+    privateAttemptId: string,
+    parentUserId: string,
+  ) {
+    const parentProfile =
+      await this.parentProfilesService.findByUserId(parentUserId);
     const slot = await this.slots.findOne({
-      where: { id: privateAttemptId, parentId },
+      where: { id: privateAttemptId, parentId: parentProfile.id },
       relations: { privateChild: true },
     });
 
@@ -291,12 +312,16 @@ export class EvaluationSlotService {
       throw new BadRequestException('No payment record linked to this attempt');
     }
 
-    const parentUserId = await this.parentProfilesService.getUserIdForParentProfile(
-      parentId,
+    const paymentUserId =
+      await this.parentProfilesService.getUserIdForParentProfile(
+        parentProfile.id,
+      );
+    const refreshed = await this.payments.retryPayment(
+      slot.paymentId,
+      paymentUserId,
     );
-    const refreshed = await this.payments.retryPayment(slot.paymentId, parentUserId);
     await this.notifyPaymentRequired(
-      parentId,
+      parentProfile.id,
       slot.privateChild!.name,
       refreshed.checkoutUrl,
       refreshed.expiresAt,
@@ -403,9 +428,8 @@ export class EvaluationSlotService {
   }
 
   private async notifyRetakeRequested(parentId: string, childName: string) {
-    const userId = await this.parentProfilesService.getUserIdForParentProfile(
-      parentId,
-    );
+    const userId =
+      await this.parentProfilesService.getUserIdForParentProfile(parentId);
     if (!userId) return;
     await this.notifications.enqueue({
       delivery: NotificationDelivery.IN_APP,
@@ -420,9 +444,8 @@ export class EvaluationSlotService {
     childName: string,
     requestId: string,
   ) {
-    const userId = await this.parentProfilesService.getUserIdForParentProfile(
-      parentId,
-    );
+    const userId =
+      await this.parentProfilesService.getUserIdForParentProfile(parentId);
     if (!userId) return;
     await this.notifications.enqueue({
       delivery: NotificationDelivery.IN_APP,
@@ -438,9 +461,8 @@ export class EvaluationSlotService {
     paymentUrl: string,
     expiresAt: Date,
   ) {
-    const userId = await this.parentProfilesService.getUserIdForParentProfile(
-      parentId,
-    );
+    const userId =
+      await this.parentProfilesService.getUserIdForParentProfile(parentId);
     if (!userId) return;
     await this.notifications.enqueue({
       delivery: NotificationDelivery.IN_APP,

@@ -17,7 +17,7 @@ import { ChildProfile } from './child-profile.entity';
 import { Class } from 'src/classes/entities/class.entity';
 import { Organization } from 'src/organizations/entities/organization.entity';
 import { EvaluationSlot } from 'src/evaluations/entities/evaluation-slot.entity';
-
+@Index('idx_parent_org', ['organizationId', 'parentId'])
 @Entity('organization_children')
 export class OrganizationChild {
   @PrimaryGeneratedColumn('uuid')
@@ -55,7 +55,9 @@ export class OrganizationChild {
   @Column({ type: 'uuid' })
   createdById: string;
 
-  @ManyToOne(() => User, (user) => user.organizationChildren, { onDelete: 'CASCADE' })
+  @ManyToOne(() => User, (user) => user.organizationChildren, {
+    onDelete: 'CASCADE',
+  })
   @JoinColumn({ name: 'createdById' })
   createdBy: User;
 

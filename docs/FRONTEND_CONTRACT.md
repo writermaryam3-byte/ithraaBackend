@@ -191,7 +191,12 @@ PENDING, SELECTED, APPROVED, REJECTED
 
 ### EvaluationType
 ```
-multiple_intelligences, pride, renzulli, holland, learning_styles, torrance
+multiple_intelligences, pride, renzulli, holland, learning_styles, torrance, preschool_giftedness
+```
+
+### CapacityRequestStatus
+```
+pending, approved, rejected, paid, completed
 ```
 
 ### EvaluationAttemptStatus
@@ -588,7 +593,75 @@ organization = "organization", private = "private"
 
 ---
 
-## 6. Child Transfers (`/child-transfers`)
+## 6. Capacity Requests (`/capacity-requests`)
+
+### POST `/capacity-requests` — Create capacity request
+- **Roles**: PARENT
+- **Body**:
+```json
+{
+  "requestedCapacity": 2,
+  "notes": "Need capacity for two more children"
+}
+```
+- **Response**:
+```json
+{
+  "id": "uuid",
+  "parentId": "uuid",
+  "requestedCapacity": 2,
+  "status": "pending",
+  "paymentId": null,
+  "notes": "Need capacity for two more children",
+  "createdAt": "ISO",
+  "updatedAt": "ISO"
+}
+```
+
+### GET `/capacity-requests` — List capacity requests
+- **Roles**: PARENT (own requests), ADMIN (all requests)
+- **Response**:
+```json
+[
+  {
+    "id": "uuid",
+    "parentId": "uuid",
+    "parent": { "id": "uuid", "name": "Parent Name" },
+    "requestedCapacity": 2,
+    "status": "pending",
+    "paymentId": null,
+    "notes": "Need capacity for two more children",
+    "createdAt": "ISO",
+    "updatedAt": "ISO"
+  }
+]
+```
+
+### GET `/capacity-requests/:id` — Get capacity request
+- **Roles**: PARENT (own request), ADMIN (any request)
+
+### PATCH `/capacity-requests/:id` — Update capacity request
+- **Roles**: ADMIN
+- **Body**:
+```json
+{
+  "status": "approved",
+  "notes": "Approved — send payment link",
+  "paymentId": "uuid (optional)"
+}
+```
+
+### POST `/capacity-requests/:id/approve` — Approve capacity request
+- **Roles**: ADMIN
+- **Response**: Updated capacity request with status `approved`
+
+### POST `/capacity-requests/:id/reject` — Reject capacity request
+- **Roles**: ADMIN
+- **Response**: Updated capacity request with status `rejected`
+
+---
+
+## 7. Child Transfers (`/child-transfers`)
 
 ### POST `/child-transfers` — Request transfer
 - **Roles**: ORGANIZATIONOWNER, ADMIN
@@ -661,9 +734,63 @@ organization = "organization", private = "private"
 
 ## 8. Parents (`/parents`)
 
-### GET `/parents/search` — Find parent by phone
+### GET `/parents/search` — Find parent by phone (with all children)
 - **Roles**: ORGANIZATIONOWNER, ADMIN
 - **Query**: `?phone=+201503657687`
+- **Response** (3 possible statuses):
+
+**1. User not found:**
+```json
+{ "status": "not_found" }
+```
+
+**2. User exists but has no PARENT role:**
+```json
+{
+  "status": "not_parent",
+  "user": { "id": "uuid", "name": "string", "phone": "string" }
+}
+```
+
+**3. Parent found with all children (org + private):**
+```json
+{
+  "status": "parent_found",
+  "parent": {
+    "id": "uuid",
+    "name": "string",
+    "email": "string",
+    "phone": "string",
+    "parentProfileId": "uuid",
+    "roles": [{ "name": "PARENT" }]
+  },
+  "children": [
+    {
+      "id": "uuid",
+      "name": "string",
+      "birthDate": "2007-05-21",
+      "gender": "male",
+      "type": "organization",
+      "classId": "uuid",
+      "organizationId": "uuid",
+      "createdAt": "ISO"
+    },
+    {
+      "id": "uuid",
+      "name": "string",
+      "birthDate": "2007-02-28",
+      "gender": "female",
+      "type": "private",
+      "createdAt": "ISO"
+    }
+  ]
+}
+```
+
+**Frontend usage:** This endpoint is the primary way org owners find/reuse existing parents. The `status` field tells the UI what action to take:
+- `not_found` → show "Create Parent" form
+- `not_parent` → show "Convert to Parent" option
+- `parent_found` → select parent, see existing children, optionally add new child or request transfer
 
 ---
 
@@ -1147,6 +1274,38 @@ organization = "organization", private = "private"
   "size": 123456
 }
 ```
+
+---
+
+## Evaluation Report Formats
+
+The evaluation report builder now supports two formats depending on the evaluation type:
+
+### 1. Standard Evaluation Result (multiple_intelligences, pride, renzulli, holland, learning_styles, torrance)
+- Has `maxTotalScore`, `overallPercentage`, `topDimensions`, `interpretation`, `recommendations`
+- Standard format used for all existing evaluation types
+
+### 2. Preschool Giftedness Evaluation Result (preschool_giftedness)
+```json
+{
+  "totalScore": 180,
+  "averageScore": 3.6,
+  "giftedIndicator": true,
+  "level": "HIGH",
+  "dimensions": [
+    {
+      "code": "multiple_interests",
+      "name": "تعدد الاهتمامات",
+      "questionCount": 14,
+      "totalScore": 56,
+      "averageScore": 4.0
+    }
+  ]
+}
+```
+
+- No `maxTotalScore`, `overallPercentage`, `topDimensions`, `interpretation`, `recommendations`
+- Has `averageScore`, `giftedIndicator`, `level`, and specific dimension structure with `questionCount`
 
 ---
 

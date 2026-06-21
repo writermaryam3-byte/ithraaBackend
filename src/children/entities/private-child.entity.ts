@@ -34,7 +34,9 @@ export class PrivateChild {
   @Column({ type: 'uuid' })
   createdById: string;
 
-  @ManyToOne(() => User, (user) => user.privateChildren, { onDelete: 'CASCADE' })
+  @ManyToOne(() => User, (user) => user.privateChildren, {
+    onDelete: 'CASCADE',
+  })
   @JoinColumn({ name: 'createdById' })
   createdBy: User;
 

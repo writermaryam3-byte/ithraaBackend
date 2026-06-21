@@ -5,4 +5,5 @@ export enum EvaluationType {
   HOLLAND = 'holland',
   LEARNING_STYLES = 'learning_styles',
   TORRANCE = 'torrance',
+  PRESCHOOL_GIFTEDNESS = 'preschool_giftedness',
 }

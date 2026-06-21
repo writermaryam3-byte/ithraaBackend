@@ -20,16 +20,27 @@ import { EvaluationAttempt } from './evaluation-attempt.entity';
 import { ensureSingleChildType } from 'src/common/helpers/child-resolver.helper';
 
 @Entity('evaluation_slot')
-@Index('idx_evaluation_slot_org_child_status', ['organizationChildId', 'status'])
+@Index('idx_evaluation_slot_org_child_status', [
+  'organizationChildId',
+  'status',
+])
 @Index('idx_evaluation_slot_private_child_status', ['privateChildId', 'status'])
-@Index('uq_evaluation_slot_org_active_kind', ['organizationChildId', 'parentId', 'kind'], {
-  unique: true,
-  where: `"status" IN ('READY', 'REQUESTED', 'AWAITING_PAYMENT', 'CONSUMED') AND "organizationChildId" IS NOT NULL`,
-})
-@Index('uq_evaluation_slot_private_active_kind', ['privateChildId', 'parentId', 'kind'], {
-  unique: true,
-  where: `"status" IN ('READY', 'REQUESTED', 'AWAITING_PAYMENT', 'CONSUMED') AND "privateChildId" IS NOT NULL`,
-})
+@Index(
+  'uq_evaluation_slot_org_active_kind',
+  ['organizationChildId', 'parentId', 'kind'],
+  {
+    unique: true,
+    where: `"status" IN ('READY', 'REQUESTED', 'AWAITING_PAYMENT', 'CONSUMED') AND "organizationChildId" IS NOT NULL`,
+  },
+)
+@Index(
+  'uq_evaluation_slot_private_active_kind',
+  ['privateChildId', 'parentId', 'kind'],
+  {
+    unique: true,
+    where: `"status" IN ('READY', 'REQUESTED', 'AWAITING_PAYMENT', 'CONSUMED') AND "privateChildId" IS NOT NULL`,
+  },
+)
 @Index('uq_evaluation_slot_attempt', ['evaluationAttemptId'], {
   unique: true,
   where: `"evaluationAttemptId" IS NOT NULL`,
@@ -42,7 +53,10 @@ export class EvaluationSlot {
   @Column({ type: 'uuid', nullable: true })
   organizationChildId: string | null;
 
-  @ManyToOne(() => OrganizationChild, (c) => c.slots, { onDelete: 'CASCADE', nullable: true })
+  @ManyToOne(() => OrganizationChild, (c) => c.slots, {
+    onDelete: 'CASCADE',
+    nullable: true,
+  })
   @JoinColumn({ name: 'organizationChildId' })
   organizationChild: OrganizationChild | null;
 
@@ -50,7 +64,10 @@ export class EvaluationSlot {
   @Column({ type: 'uuid', nullable: true })
   privateChildId: string | null;
 
-  @ManyToOne(() => PrivateChild, (c) => c.slots, { onDelete: 'CASCADE', nullable: true })
+  @ManyToOne(() => PrivateChild, (c) => c.slots, {
+    onDelete: 'CASCADE',
+    nullable: true,
+  })
   @JoinColumn({ name: 'privateChildId' })
   privateChild: PrivateChild | null;
 

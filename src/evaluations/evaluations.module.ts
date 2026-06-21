@@ -37,6 +37,7 @@ import { RenzulliStrategy } from './strategies/renzulli.strategy';
 import { PrideStrategy } from './strategies/pride.strategy';
 import { LearningStylesStrategy } from './strategies/learning-styles.strategy';
 import { TorranceStrategy } from './strategies/torrance.strategy';
+import { PreschoolGiftednessStrategy } from './strategies/preschool-giftedness.strategy';
 import { EvaluationSeedingService } from './evaluation-seeding.service';
 
 @Module({
@@ -84,6 +85,7 @@ import { EvaluationSeedingService } from './evaluation-seeding.service';
     PrideStrategy,
     LearningStylesStrategy,
     TorranceStrategy,
+    PreschoolGiftednessStrategy,
     EvaluationSeedingService,
   ],
   exports: [AttemptUsageService, EvaluationSlotService],

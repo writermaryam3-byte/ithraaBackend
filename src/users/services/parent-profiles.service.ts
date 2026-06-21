@@ -15,6 +15,7 @@ import { UserRole } from 'src/common/enums/role.enum';
 import { ParentOrganizationStatus } from '../enums/parent-organization-status.enum';
 import { ParentOrganizationSource } from '../enums/parent-organization-source.enum';
 import { UsersService } from './users.service';
+import { randomUUID } from 'crypto';
 
 @Injectable()
 export class ParentProfilesService {
@@ -36,7 +37,7 @@ export class ParentProfilesService {
    */
   async ensureParentProfileForUser(
     userId: string,
-    manager?: EntityManager | undefined,
+    manager?: EntityManager,
   ): Promise<ParentProfile> {
     const repo = manager
       ? manager.getRepository(ParentProfile)
@@ -91,11 +92,20 @@ export class ParentProfilesService {
   /**
    * Find parent profile by user ID.
    */
-  async findByUserId(userId: string): Promise<ParentProfile | null> {
-    return this.parentProfileRepository.findOne({
+  async findByUserId(userId: string): Promise<ParentProfile> {
+    const parentProfile = await this.parentProfileRepository.findOne({
       where: { userId },
-      relations: ['user', 'organizationLinks', 'organizationChildren', 'privateChildren'],
+      relations: [
+        'user',
+        'organizationLinks',
+        'organizationChildren',
+        'privateChildren',
+      ],
     });
+    if (!parentProfile) {
+      throw new NotFoundException(`parent with id ${userId} isn't found`);
+    }
+    return parentProfile;
   }
 
   /**
@@ -104,7 +114,12 @@ export class ParentProfilesService {
   async findById(parentProfileId: string): Promise<ParentProfile | null> {
     return this.parentProfileRepository.findOne({
       where: { id: parentProfileId },
-      relations: ['user', 'organizationLinks', 'organizationChildren', 'privateChildren'],
+      relations: [
+        'user',
+        'organizationLinks',
+        'organizationChildren',
+        'privateChildren',
+      ],
     });
   }
 
@@ -281,18 +296,19 @@ export class ParentProfilesService {
   }
 
   private createTemporaryPassword(): string {
-    const { randomUUID } = require('crypto');
     return `Temp-${randomUUID()}aA1!`;
   }
 
   private createPlaceholderEmail(phone: string): string {
-    const { randomUUID } = require('crypto');
     const normalizedPhone = phone.replace(/\D/g, '');
     return `parent-${normalizedPhone}-${randomUUID()}@placeholder.ithraa.local`;
   }
 
   @OnEvent('payment.success')
-  async handlePaymentSuccess(payload: { userId: string; metadata: Record<string, unknown> }) {
+  async handlePaymentSuccess(payload: {
+    userId: string;
+    metadata: Record<string, unknown>;
+  }) {
     const capacityIncrease = payload.metadata?.capacityIncrease;
     if (!capacityIncrease) return;
 
@@ -301,7 +317,8 @@ export class ParentProfilesService {
     });
     if (!profile) return;
 
-    const increment = typeof capacityIncrease === 'number' ? capacityIncrease : 1;
+    const increment =
+      typeof capacityIncrease === 'number' ? capacityIncrease : 1;
     profile.maxChildren += increment;
     await this.parentProfileRepository.save(profile);
     Logger.log(

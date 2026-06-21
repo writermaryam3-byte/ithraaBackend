@@ -13,6 +13,7 @@ import { ParentProfile } from './parent-profile.entity';
 import { Organization } from 'src/organizations/entities/organization.entity';
 import { ParentOrganizationStatus } from '../enums/parent-organization-status.enum';
 import { ParentOrganizationSource } from '../enums/parent-organization-source.enum';
+import { User } from './user.entity';
 
 @Entity('parent_organizations')
 @Unique('uq_parent_organization', ['parentId', 'organizationId'])
@@ -56,9 +57,23 @@ export class ParentOrganization {
   })
   source: ParentOrganizationSource | null;
 
+  @Index()
+  @Column({ type: 'uuid', nullable: true })
+  indexedById: string;
+
+  @ManyToOne(() => User, (user) => user.parentOrganization, {
+    // onDelete: 'CASCADE',
+    nullable: true,
+  })
+  @JoinColumn({ name: 'indexedById' })
+  indexedBy: User;
+
   @CreateDateColumn()
-  createdAt: Date;
+  indexedAt: Date;
 
   @UpdateDateColumn()
   updatedAt: Date;
+
+  @Column({ type: 'timestamp', nullable: true })
+  lastActivityAt: Date;
 }

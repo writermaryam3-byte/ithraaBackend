@@ -252,6 +252,8 @@ export class ChildrenService {
           manager,
         );
 
+      console.log(parentProfile);
+
       // Link parent to organization if not already linked
       await this.parentProfilesService.linkParentToOrganization(
         parentProfile.id,

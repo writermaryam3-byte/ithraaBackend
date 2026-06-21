@@ -35,16 +35,32 @@ import { ensureSingleChildType } from 'src/common/helpers/child-resolver.helper'
   'privateChildId',
   'attemptNumber',
 ])
-@Index('idx_eval_attempt_org_lookup', ['evaluationId', 'parentId', 'organizationChildId'])
-@Index('idx_eval_attempt_private_lookup', ['evaluationId', 'parentId', 'privateChildId'])
-@Index('uq_eval_attempt_org_in_progress', ['evaluationId', 'parentId', 'organizationChildId'], {
-  unique: true,
-  where: `"status" = 'in_progress' AND "organizationChildId" IS NOT NULL`,
-})
-@Index('uq_eval_attempt_private_in_progress', ['evaluationId', 'parentId', 'privateChildId'], {
-  unique: true,
-  where: `"status" = 'in_progress' AND "privateChildId" IS NOT NULL`,
-})
+@Index('idx_eval_attempt_org_lookup', [
+  'evaluationId',
+  'parentId',
+  'organizationChildId',
+])
+@Index('idx_eval_attempt_private_lookup', [
+  'evaluationId',
+  'parentId',
+  'privateChildId',
+])
+@Index(
+  'uq_eval_attempt_org_in_progress',
+  ['evaluationId', 'parentId', 'organizationChildId'],
+  {
+    unique: true,
+    where: `"status" = 'in_progress' AND "organizationChildId" IS NOT NULL`,
+  },
+)
+@Index(
+  'uq_eval_attempt_private_in_progress',
+  ['evaluationId', 'parentId', 'privateChildId'],
+  {
+    unique: true,
+    where: `"status" = 'in_progress' AND "privateChildId" IS NOT NULL`,
+  },
+)
 export class EvaluationAttempt {
   @PrimaryGeneratedColumn('uuid')
   id: string;

@@ -7,6 +7,7 @@ import { RenzulliStrategy } from './renzulli.strategy';
 import { PrideStrategy } from './pride.strategy';
 import { LearningStylesStrategy } from './learning-styles.strategy';
 import { TorranceStrategy } from './torrance.strategy';
+import { PreschoolGiftednessStrategy } from './preschool-giftedness.strategy';
 
 @Injectable()
 export class ScoringStrategyFactory {
@@ -17,6 +18,7 @@ export class ScoringStrategyFactory {
     private prideStrategy: PrideStrategy,
     private learningStylesStrategy: LearningStylesStrategy,
     private torranceStrategy: TorranceStrategy,
+    private preschoolGiftednessStrategy: PreschoolGiftednessStrategy,
   ) {}
 
   getStrategy(type: EvaluationType): ScoringStrategy {
@@ -27,6 +29,7 @@ export class ScoringStrategyFactory {
       [EvaluationType.HOLLAND, this.hollandStrategy],
       [EvaluationType.LEARNING_STYLES, this.learningStylesStrategy],
       [EvaluationType.TORRANCE, this.torranceStrategy],
+      [EvaluationType.PRESCHOOL_GIFTEDNESS, this.preschoolGiftednessStrategy],
     ]);
 
     const strategy = strategyMap.get(type);

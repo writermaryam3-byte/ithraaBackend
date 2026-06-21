@@ -110,6 +110,7 @@ export class EvaluationSubmissionService {
       attempt.score = totalScore;
       attempt.result = result;
 
+      attempt.status = EvaluationAttemptStatus.APPROVED;
       await attemptRepo.save(attempt);
       const childId = getChildId(attempt);
       if (childId) {

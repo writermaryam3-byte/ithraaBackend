@@ -15,12 +15,17 @@ export class ChildProfile {
   @PrimaryGeneratedColumn('uuid')
   id: string;
 
+  @Column({ type: 'uuid' })
+  organizationChildId: string;
+
   @OneToOne(() => OrganizationChild, (child) => child.profile, {
     nullable: true,
   })
   @JoinColumn({ name: 'organizationChildId' })
   organizationChild: OrganizationChild;
 
+  @Column({ type: 'uuid' })
+  privateChildId: string;
   @OneToOne(() => PrivateChild, (child) => child.profile, {
     nullable: true,
   })
