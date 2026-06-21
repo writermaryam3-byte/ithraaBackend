@@ -1,6 +1,4 @@
 import { Exclude } from 'class-transformer';
-import { Child } from 'src/children/entities/child.entity';
-import { Organization } from 'src/organizations/entities/organization.entity';
 import {
   Entity,
   PrimaryGeneratedColumn,
@@ -11,11 +9,15 @@ import {
   OneToOne,
   ManyToMany,
   JoinTable,
-  ManyToOne,
 } from 'typeorm';
 import { Role } from './user-roles.entity';
 import { Enricher } from './enricher.entity';
 import { Teacher } from './teacher.entity';
+import { ParentProfile } from './parent-profile.entity';
+import { OrganizationChild } from '../../children/entities/organization-child.entity';
+import { PrivateChild } from '../../children/entities/private-child.entity';
+import { Organization } from '../../organizations/entities/organization.entity';
+import { ParentOrganization } from './parent-organization.entity';
 
 @Entity('users')
 export class User {
@@ -51,26 +53,25 @@ export class User {
   @OneToOne(() => Organization, (org) => org.owner)
   ownedOrganization: Organization;
 
-  /**
-   * Organization membership
-   */
-  @ManyToOne(() => Organization, (org) => org.users, {
-    nullable: true,
-    onDelete: 'SET NULL',
-  })
-  organization: Organization;
-
   @OneToOne(() => Enricher, (enricher) => enricher.user)
   enricher: Enricher;
 
   @OneToOne(() => Teacher, (teacher) => teacher.user)
   teacher: Teacher;
 
-  @OneToMany(() => Child, (child) => child.createdBy)
-  children: Child[];
+  @OneToMany(() => ParentOrganization, (parent) => parent.indexedBy)
+  parentOrganization: ParentOrganization[];
 
-  @OneToMany(() => Child, (child) => child.parent)
-  parentChildren: Child[];
+  @OneToMany(() => OrganizationChild, (child) => child.createdBy)
+  organizationChildren: OrganizationChild[];
+
+  @OneToMany(() => PrivateChild, (child) => child.createdBy)
+  privateChildren: PrivateChild[];
+
+  @OneToOne(() => ParentProfile, (profile) => profile.user, {
+    nullable: true,
+  })
+  parentProfile: ParentProfile;
 
   @CreateDateColumn()
   createdAt: Date;

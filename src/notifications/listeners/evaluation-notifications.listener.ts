@@ -3,10 +3,14 @@ import { OnEvent } from '@nestjs/event-emitter';
 import { NotificationsService } from '../notifications.service';
 import { NotificationDelivery } from '../enums/notification-delivery.enum';
 import { EVALUATION_EVENTS } from 'src/evaluations/evaluations.events';
+import { ParentProfilesService } from 'src/users/services/parent-profiles.service';
 
 @Injectable()
 export class EvaluationNotificationsListener {
-  constructor(private readonly notifications: NotificationsService) {}
+  constructor(
+    private readonly notifications: NotificationsService,
+    private readonly parentProfilesService: ParentProfilesService,
+  ) {}
 
   @OnEvent(EVALUATION_EVENTS.submitted)
   async onEvaluationSubmitted(payload: {
@@ -17,9 +21,14 @@ export class EvaluationNotificationsListener {
     score: number | null;
     autoSubmitted?: boolean;
   }) {
+    const userId = await this.parentProfilesService.getUserIdForParentProfile(
+      payload.parentId,
+    );
+    if (!userId) return;
+
     await this.notifications.enqueue({
       delivery: NotificationDelivery.IN_APP,
-      userId: payload.parentId,
+      userId,
       title: 'تم إرسال التقييم',
       message: payload.autoSubmitted
         ? 'تم إرسال التقييم تلقائيًا بعد انتهاء الوقت.'
@@ -42,9 +51,14 @@ export class EvaluationNotificationsListener {
     approvedBy: string;
     approvedAt: Date;
   }) {
+    const userId = await this.parentProfilesService.getUserIdForParentProfile(
+      payload.parentId,
+    );
+    if (!userId) return;
+
     await this.notifications.enqueue({
       delivery: NotificationDelivery.IN_APP,
-      userId: payload.parentId,
+      userId,
       title: 'تم اعتماد نتيجة التقييم',
       message: 'تم اعتماد نتيجة تقييم طفلك ويمكنك الآن الاطلاع على النتيجة.',
       type: 'evaluation_approved',
@@ -64,9 +78,14 @@ export class EvaluationNotificationsListener {
     attempts: number;
     reason: string;
   }) {
+    const userId = await this.parentProfilesService.getUserIdForParentProfile(
+      payload.parentId,
+    );
+    if (!userId) return;
+
     await this.notifications.enqueue({
       delivery: NotificationDelivery.IN_APP,
-      userId: payload.parentId,
+      userId,
       title: 'تم الوصول لحد المحاولات',
       message: 'تم الوصول إلى الحد الأقصى من محاولات التقييم.',
       type: 'evaluation_limit_reached',

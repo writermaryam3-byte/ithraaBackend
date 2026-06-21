@@ -1,4 +1,5 @@
-import { Child } from 'src/children/entities/child.entity';
+import { OrganizationChild } from './organization-child.entity';
+import { PrivateChild } from './private-child.entity';
 import { TransferRequestStatus } from 'src/children/enums/transfer-request-status.enum';
 import { Organization } from 'src/organizations/entities/organization.entity';
 import {
@@ -9,7 +10,10 @@ import {
   JoinColumn,
   ManyToOne,
   PrimaryGeneratedColumn,
+  BeforeInsert,
+  BeforeUpdate,
 } from 'typeorm';
+import { ensureSingleChildType } from 'src/common/helpers/child-resolver.helper';
 
 @Entity('transfer_requests')
 export class TransferRequest {
@@ -17,12 +21,20 @@ export class TransferRequest {
   id: string;
 
   @Index()
-  @Column({ type: 'uuid' })
-  childId: string;
+  @Column({ type: 'uuid', nullable: true })
+  organizationChildId: string | null;
 
-  @ManyToOne(() => Child, { onDelete: 'CASCADE' })
-  @JoinColumn({ name: 'childId' })
-  child: Child;
+  @ManyToOne(() => OrganizationChild, { onDelete: 'CASCADE', nullable: true })
+  @JoinColumn({ name: 'organizationChildId' })
+  organizationChild: OrganizationChild | null;
+
+  @Index()
+  @Column({ type: 'uuid', nullable: true })
+  privateChildId: string | null;
+
+  @ManyToOne(() => PrivateChild, { onDelete: 'CASCADE', nullable: true })
+  @JoinColumn({ name: 'privateChildId' })
+  privateChild: PrivateChild | null;
 
   @Index()
   @Column({ type: 'uuid' })
@@ -49,4 +61,10 @@ export class TransferRequest {
 
   @CreateDateColumn()
   createdAt: Date;
+
+  @BeforeInsert()
+  @BeforeUpdate()
+  validateChildType() {
+    ensureSingleChildType(this.organizationChildId, this.privateChildId);
+  }
 }

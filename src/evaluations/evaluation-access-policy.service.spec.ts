@@ -17,8 +17,12 @@ describe('EvaluationAccessPolicy', () => {
   it('assertParentOwnership rejects another parent', () => {
     expect(() =>
       policy.assertParentOwnership(
-        { parentId: 'p1' } as any,
-        { userId: 'p2', roles: [UserRole.PARENT] },
+        { parentId: 'parent-profile-1' } as any,
+        {
+          userId: 'user-2',
+          parentProfileId: 'parent-profile-2',
+          roles: [UserRole.PARENT],
+        },
       ),
     ).toThrow(ForbiddenException);
   });
@@ -26,8 +30,12 @@ describe('EvaluationAccessPolicy', () => {
   it('assertParentOwnership allows owning parent', () => {
     expect(() =>
       policy.assertParentOwnership(
-        { parentId: 'p1' } as any,
-        { userId: 'p1', roles: [UserRole.PARENT] },
+        { parentId: 'parent-profile-1' } as any,
+        {
+          userId: 'user-1',
+          parentProfileId: 'parent-profile-1',
+          roles: [UserRole.PARENT],
+        },
       ),
     ).not.toThrow();
   });

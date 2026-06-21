@@ -6,7 +6,6 @@ import {
 } from '@nestjs/common';
 import { EventEmitter2 } from 'eventemitter2';
 import { DataSource } from 'typeorm';
-import { Child } from 'src/children/entities/child.entity';
 import { UserRole } from 'src/common/enums/role.enum';
 import { SubmitAttemptDto } from '../dto/submit-attempt.dto';
 import { EvaluationAnswer } from '../entities/evaluation-answer.entity';
@@ -21,6 +20,7 @@ import {
 } from './evaluation-access-policy.service';
 import { EvaluationAnswerBuilderService } from './evaluation-answer-builder.service';
 import { EvaluationSlotService } from './evaluation-slot.service';
+import { getChildId } from 'src/common/helpers/child-resolver.helper';
 
 type EvaluationSubmittedPayload = {
   attemptId: string;
@@ -110,18 +110,22 @@ export class EvaluationSubmissionService {
       attempt.score = totalScore;
       attempt.result = result;
 
+      attempt.status = EvaluationAttemptStatus.APPROVED;
       await attemptRepo.save(attempt);
-      await this.slots.markPrivateAttemptCompleted(
-        manager,
-        attempt.id,
-        attempt.childId,
-      );
+      const childId = getChildId(attempt);
+      if (childId) {
+        await this.slots.markPrivateAttemptCompleted(
+          manager,
+          attempt.id,
+          childId,
+        );
+      }
 
       eventPayload = {
         attemptId: attempt.id,
         evaluationId: attempt.evaluationId,
         parentId: attempt.parentId,
-        childId: attempt.childId,
+        childId: childId || '',
         score: totalScore,
         result,
         autoSubmitted: expired,
@@ -198,17 +202,20 @@ export class EvaluationSubmissionService {
       attempt.result = result;
 
       await attemptRepo.save(attempt);
-      await this.slots.markPrivateAttemptCompleted(
-        manager,
-        attempt.id,
-        attempt.childId,
-      );
+      const childId = getChildId(attempt);
+      if (childId) {
+        await this.slots.markPrivateAttemptCompleted(
+          manager,
+          attempt.id,
+          childId,
+        );
+      }
 
       eventPayload = {
         attemptId: attempt.id,
         evaluationId: attempt.evaluationId,
         parentId: attempt.parentId,
-        childId: attempt.childId,
+        childId: childId || '',
         score: totalScore,
         result: attempt.result,
         autoSubmitted: true,

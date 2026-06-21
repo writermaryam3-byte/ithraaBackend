@@ -31,8 +31,8 @@ export class Evaluation {
   title: string;
 
   @Index()
-  @Column({ type: 'uuid' })
-  institutionId: string;
+  @Column({ type: 'uuid', nullable: true })
+  institutionId: string | null;
 
   @OneToMany(() => EvaluationAttempt, (a) => a.evaluation)
   attempts: EvaluationAttempt[];

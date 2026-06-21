@@ -4,7 +4,7 @@ import type { PaymentProviderEnum } from '../enums/payment-provider.enum';
 export type CreatePaymentFields = {
   amount: number;
   currency?: string;
-  childId: string;
+  privateChildId: string;
   attemptRequestId?: string;
   privateAttemptId?: string;
   description?: string;

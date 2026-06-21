@@ -73,14 +73,8 @@ export class Organization {
   /**
    * Users inside organization
    */
-  @OneToMany(() => User, (user) => user.organization)
-  users: User[];
-
   @OneToMany(() => Teacher, (teacher) => teacher.organization)
   teachers: Teacher[];
-
-  @OneToMany(() => User, (parent) => parent.organization)
-  parents: User[];
 
   @OneToMany(() => Grade, (grade) => grade.organization)
   grades: Grade[];

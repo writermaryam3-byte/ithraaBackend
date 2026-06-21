@@ -19,6 +19,7 @@ import { SessionService } from 'src/session/session.service';
 import bcrypt from 'bcrypt';
 import { BeneficiariesSignupDto } from '../dto/beneficiaries/beneficiaries-signup.dto';
 import { EnrichersSignupDto } from '../dto/enrichers/enrichers-signup.dto';
+import { ParentSignupDto } from '../dto/parent-signup.dto';
 import { Public } from '../decorators/public.decorator';
 import { type AuthRequest } from 'src/common/interfaces/auth-request.interface';
 import { AuthProvider, TokenPayload } from '../services/auth.provider';
@@ -69,6 +70,18 @@ export class AuthController {
       throw new ConflictException('User already exists');
     }
     return this.authService.enrichersSignup(dto);
+  }
+  @Public()
+  @Post('parent-signup')
+  async parentSignup(@Body() dto: ParentSignupDto) {
+    const alreadyExists = await this.authService.isAlreadyExits(
+      dto.phone,
+      dto.email,
+    );
+    if (alreadyExists) {
+      throw new ConflictException('User already exists');
+    }
+    return this.authService.parentSignup(dto);
   }
   @Public()
   @Post('refresh')

@@ -33,6 +33,7 @@ import {
   type PaymentFailedEventPayload,
   type PaymentSuccessEventPayload,
 } from './payments.events';
+import { AuditLoggingService } from 'src/common/services/audit-logging.service';
 
 const PAYMENT_QUEUE_JOB_OPTIONS: JobOptions = {
   attempts: Number(process.env.PAYMENT_JOB_ATTEMPTS ?? 8),
@@ -67,6 +68,7 @@ export class PaymentsService {
     private readonly payments: Repository<Payment>,
     @InjectRepository(PaymentWebhookDedup)
     private readonly webhookDedup: Repository<PaymentWebhookDedup>,
+    private readonly auditService: AuditLoggingService,
   ) {
     this.provider = providerToken as PaymentProvider;
   }
@@ -138,15 +140,16 @@ export class PaymentsService {
 
     const childExists = await this.dataSource
       .createQueryBuilder()
-      .from('children', 'c')
-      .where('c.id = :childId', { childId: input.childId })
-      .andWhere('c.parentId = :parentId', { parentId: userId })
+      .from('private_children', 'c')
+      .innerJoin('parent_profiles', 'p', 'c."parentId" = p.id')
+      .where('c.id = :privateChildId', { privateChildId: input.privateChildId })
+      .andWhere('p."userId" = :userId', { userId })
       .getCount();
     if (childExists < 1) {
       throw new ForbiddenException('Child not found for this parent');
     }
 
-    const metadata: PaymentMetadata = { childId: input.childId };
+    const metadata: PaymentMetadata = { privateChildId: input.privateChildId };
     if (input.attemptRequestId) {
       metadata.attemptRequestId = input.attemptRequestId;
     }
@@ -164,7 +167,7 @@ export class PaymentsService {
 
     const payment = this.payments.create({
       userId,
-      childId: input.childId,
+      privateChildId: input.privateChildId,
       privateAttemptId: input.privateAttemptId ?? null,
       paymentUrl: null,
       amount: amountStr,
@@ -178,7 +181,7 @@ export class PaymentsService {
       expiresAt: this.resolveExpiresAt(Boolean(input.privateAttemptId)),
     });
 
-    const saved = await this.payments.save(payment);
+    const saved = (await this.payments.save(payment)) as unknown as Payment;
 
     try {
       const session = await this.provider.createPayment({
@@ -193,7 +196,7 @@ export class PaymentsService {
 
       saved.providerPaymentId = session.providerId;
       saved.paymentUrl = session.url;
-      await this.payments.save(saved);
+      (await this.payments.save(saved)) as unknown as Payment;
 
       this.logger.log(
         `Created payment ${saved.id} (${providerCode}) session ${session.providerId}`,
@@ -211,7 +214,7 @@ export class PaymentsService {
         err instanceof Error ? err.stack : undefined,
       );
       saved.status = PaymentStatusEnum.FAILED;
-      await this.payments.save(saved);
+      (await this.payments.save(saved)) as unknown as Payment;
       throw err;
     }
   }
@@ -219,7 +222,7 @@ export class PaymentsService {
   async createPaymentForPrivateExtraAttempt(
     userId: string,
     input: {
-      childId: string;
+      privateChildId: string;
       privateAttemptId: string;
       amount: number;
       description?: string;
@@ -232,7 +235,7 @@ export class PaymentsService {
   }> {
     return this.createPayment(userId, {
       amount: input.amount,
-      childId: input.childId,
+      privateChildId: input.privateChildId,
       privateAttemptId: input.privateAttemptId,
       description: input.description,
     });
@@ -404,6 +407,20 @@ export class PaymentsService {
       return;
     }
 
+    await this.auditService.logCreate(
+      payment.userId,
+      '',
+      'SYSTEM',
+      'Payment',
+      payment.id,
+      {
+        amount: payment.amount,
+        currency: payment.currency,
+        status: PaymentStatusEnum.PAID,
+      },
+      'Payment successful',
+    );
+
     const eventPayload: PaymentSuccessEventPayload = {
       paymentId: payment.id,
       userId: payment.userId,
@@ -425,6 +442,21 @@ export class PaymentsService {
     if (!payment) {
       return;
     }
+
+    await this.auditService.logCreate(
+      payment.userId,
+      '',
+      'SYSTEM',
+      'Payment',
+      payment.id,
+      {
+        amount: payment.amount,
+        currency: payment.currency,
+        status: PaymentStatusEnum.FAILED,
+        reason: payload.reason,
+      },
+      'Payment failed',
+    );
 
     const eventPayload: PaymentFailedEventPayload = {
       paymentId: payment.id,

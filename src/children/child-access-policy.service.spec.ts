@@ -4,26 +4,35 @@ import { getRepositoryToken } from '@nestjs/typeorm';
 import { UserRole } from 'src/common/enums/role.enum';
 import { OrganizationsService } from 'src/organizations/organizations.service';
 import { ChildAccessPolicy } from './services/child-access-policy.service';
-import { Child } from './entities/child.entity';
+import { OrganizationChild } from './entities/organization-child.entity';
+import { PrivateChild } from './entities/private-child.entity';
 
 describe('ChildAccessPolicy', () => {
   let policy: ChildAccessPolicy;
-  let childRepo: { findOne: jest.Mock };
+  let orgChildRepo: { findOne: jest.Mock };
+  let privateChildRepo: { findOne: jest.Mock };
 
-  const child = {
-    id: 'child-1',
-    parentId: 'parent-1',
+  const orgChild = {
+    id: 'org-child-1',
+    parent: { userId: 'parent-1' },
     organization: { ownerId: 'owner-1' },
     class: null,
-  } as Child;
+  } as unknown as OrganizationChild;
+
+  const privateChild = {
+    id: 'private-child-1',
+    parent: { userId: 'parent-1' },
+  } as PrivateChild;
 
   beforeEach(async () => {
-    childRepo = { findOne: jest.fn() };
+    orgChildRepo = { findOne: jest.fn() };
+    privateChildRepo = { findOne: jest.fn() };
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         ChildAccessPolicy,
-        { provide: getRepositoryToken(Child), useValue: childRepo },
+        { provide: getRepositoryToken(OrganizationChild), useValue: orgChildRepo },
+        { provide: getRepositoryToken(PrivateChild), useValue: privateChildRepo },
         {
           provide: OrganizationsService,
           useValue: {},
@@ -34,22 +43,22 @@ describe('ChildAccessPolicy', () => {
     policy = module.get(ChildAccessPolicy);
   });
 
-  it('allows parent to read own child', async () => {
-    childRepo.findOne.mockResolvedValue(child);
+  it('allows parent to read own organization child', async () => {
+    orgChildRepo.findOne.mockResolvedValue(orgChild);
 
     await expect(
-      policy.assertCanReadChild('child-1', {
+      policy.assertCanReadChild('org-child-1', {
         userId: 'parent-1',
         roles: [{ name: UserRole.PARENT }],
       } as any),
     ).resolves.toBeDefined();
   });
 
-  it('denies parent access to another parent child', async () => {
-    childRepo.findOne.mockResolvedValue(child);
+  it('denies parent access to another parent organization child', async () => {
+    orgChildRepo.findOne.mockResolvedValue(orgChild);
 
     await expect(
-      policy.assertCanReadChild('child-1', {
+      policy.assertCanReadChild('org-child-1', {
         userId: 'parent-2',
         roles: [{ name: UserRole.PARENT }],
       } as any),
@@ -57,10 +66,10 @@ describe('ChildAccessPolicy', () => {
   });
 
   it('allows organization owner to read child in own organization', async () => {
-    childRepo.findOne.mockResolvedValue(child);
+    orgChildRepo.findOne.mockResolvedValue(orgChild);
 
     await expect(
-      policy.assertCanReadChild('child-1', {
+      policy.assertCanReadChild('org-child-1', {
         userId: 'owner-1',
         roles: [{ name: UserRole.ORGANIZATIONOWNER }],
       } as any),

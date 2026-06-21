@@ -22,6 +22,10 @@ import { Enricher } from './entities/enricher.entity';
 import { EnrichersController } from './controllers/enrichers.controller';
 import { NotificationsModule } from 'src/notifications/notifications.module';
 import { OrganizationsModule } from 'src/organizations/organizations.module';
+import { DealsModule } from 'src/deals/deals.module';
+import { ParentProfile } from './entities/parent-profile.entity';
+import { ParentOrganization } from './entities/parent-organization.entity';
+import { ParentProfilesService } from './services/parent-profiles.service';
 
 @Module({
   controllers: [
@@ -39,9 +43,18 @@ import { OrganizationsModule } from 'src/organizations/organizations.module';
     SignupStrategyFactory,
     ParentsServices,
     EnrichersService,
+    ParentProfilesService,
   ],
   imports: [
-    TypeOrmModule.forFeature([User, Role, Teacher, Enricher]),
+    TypeOrmModule.forFeature([
+      User,
+      Role,
+      Teacher,
+      Enricher,
+      ParentProfile,
+      ParentOrganization,
+    ]),
+    DealsModule,
     OrganizationsModule,
     SessionModule,
     PassportModule,
@@ -54,6 +67,6 @@ import { OrganizationsModule } from 'src/organizations/organizations.module';
       }),
     }),
   ],
-  exports: [TypeOrmModule, UsersService, AuthProvider, EnrichersService],
+  exports: [TypeOrmModule, UsersService, AuthProvider, EnrichersService, ParentProfilesService],
 })
 export class UsersModule {}

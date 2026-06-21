@@ -9,7 +9,8 @@ import { EvaluationAnswer } from './entities/evaluation-answer.entity';
 import { EvaluationApproval } from './entities/evaluation-approval.entity';
 import { EvaluationQuestion } from './entities/evaluation-question.entity';
 import { EvaluationQuestionAnswer } from './entities/evaluation-question-answer.entity';
-import { Child } from 'src/children/entities/child.entity';
+import { OrganizationChild } from 'src/children/entities/organization-child.entity';
+import { PrivateChild } from 'src/children/entities/private-child.entity';
 import { EvaluationDimension } from './entities/evaluation-dimension.entity';
 import { EvaluationScoringService } from './evaluations-scoring-services.service';
 import { OwnerEvaluationResultsController } from './owner-evaluation-results.controller';
@@ -28,6 +29,16 @@ import { EvaluationSubmissionService } from './services/evaluation-submission.se
 import { EvaluationApprovalService } from './services/evaluation-approval.service';
 import { EvaluationSlotService } from './services/evaluation-slot.service';
 import { AdminPrivateAttemptsController } from './admin-private-attempts.controller';
+import { UsersModule } from 'src/users/users.module';
+import { ScoringStrategyFactory } from './strategies/scoring-strategy.factory';
+import { MultipleIntelligencesStrategy } from './strategies/multiple-intelligences.strategy';
+import { HollandStrategy } from './strategies/holland.strategy';
+import { RenzulliStrategy } from './strategies/renzulli.strategy';
+import { PrideStrategy } from './strategies/pride.strategy';
+import { LearningStylesStrategy } from './strategies/learning-styles.strategy';
+import { TorranceStrategy } from './strategies/torrance.strategy';
+import { PreschoolGiftednessStrategy } from './strategies/preschool-giftedness.strategy';
+import { EvaluationSeedingService } from './evaluation-seeding.service';
 
 @Module({
   imports: [
@@ -38,7 +49,8 @@ import { AdminPrivateAttemptsController } from './admin-private-attempts.control
       EvaluationApproval,
       EvaluationQuestion,
       EvaluationQuestionAnswer,
-      Child,
+      OrganizationChild,
+      PrivateChild,
       Class,
       Organization,
       EvaluationDimension,
@@ -46,6 +58,7 @@ import { AdminPrivateAttemptsController } from './admin-private-attempts.control
     ]),
     forwardRef(() => PaymentsModule),
     NotificationsModule,
+    UsersModule,
   ],
   controllers: [
     EvaluationsController,
@@ -65,6 +78,15 @@ import { AdminPrivateAttemptsController } from './admin-private-attempts.control
     EvaluationSubmissionService,
     EvaluationApprovalService,
     EvaluationSlotService,
+    ScoringStrategyFactory,
+    MultipleIntelligencesStrategy,
+    HollandStrategy,
+    RenzulliStrategy,
+    PrideStrategy,
+    LearningStylesStrategy,
+    TorranceStrategy,
+    PreschoolGiftednessStrategy,
+    EvaluationSeedingService,
   ],
   exports: [AttemptUsageService, EvaluationSlotService],
 })

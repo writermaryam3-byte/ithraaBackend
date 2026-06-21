@@ -21,6 +21,9 @@ import { ProposalStatus } from './enums/proposal-status.enum';
 import { Activity } from './entities/activity.entity';
 import { Deal } from './entities/deal.entity';
 import { Proposal } from './entities/proposal.entity';
+import { AuditLoggingService } from 'src/common/services/audit-logging.service';
+import { AuditAction } from 'src/common/enums/audit-action.enum';
+import { DealAccessPolicy } from './policies/deal-access.policy';
 
 @Injectable()
 export class DealsService {
@@ -38,6 +41,8 @@ export class DealsService {
     @InjectRepository(Teacher)
     private readonly teachersRepo: Repository<Teacher>,
     private readonly notificationsService: NotificationsService,
+    private readonly auditService: AuditLoggingService,
+    private readonly dealAccessPolicy: DealAccessPolicy,
   ) {}
 
   async createDeal(dto: CreateDealDto, currentUser: JwtRequestUser) {
@@ -75,6 +80,17 @@ export class DealsService {
     });
 
     const savedDeal = await this.dealsRepo.save(deal);
+    
+    await this.auditService.logCreate(
+      currentUser.userId,
+      currentUser.email || '',
+      currentUser.roles.map(r => r.name).join(','),
+      'Deal',
+      savedDeal.id,
+      { activityId: dto.activityId, studentsCount: dto.studentsCount, deadline: dto.deadline },
+      'Created deal',
+    );
+    
     await this.notifyServiceProviders(savedDeal.id);
 
     return savedDeal;
@@ -199,6 +215,80 @@ export class DealsService {
     }
 
     throw new ForbiddenException('You are not allowed to create deals');
+  }
+
+  listDeals(status?: string) {
+    const where = status ? { status: status as DealStatus } : {};
+    return this.dealsRepo.find({ where, order: { createdAt: 'DESC' } });
+  }
+
+  findOne(id: string) {
+    return this.dealsRepo.findOne({
+      where: { id },
+      relations: ['organization', 'activity', 'creator'],
+    });
+  }
+
+  listMyProposals(userId: string) {
+    return this.proposalsRepo.find({
+      where: { provider: { id: userId } },
+      relations: ['deal', 'deal.organization'],
+      order: { createdAt: 'DESC' },
+    });
+  }
+
+  async selectProposal(proposalId: string, currentUser: JwtRequestUser) {
+    const proposal = await this.proposalsRepo.findOne({
+      where: { id: proposalId },
+      relations: ['deal', 'deal.organization', 'deal.organization.owner'],
+    });
+    if (!proposal) throw new NotFoundException('Proposal not found');
+
+    const orgId = await this.resolveOrganizationId(currentUser);
+    if (proposal.deal.organization.id !== orgId) {
+      throw new ForbiddenException('You can only manage your own organization deals');
+    }
+
+    proposal.status = ProposalStatus.SELECTED;
+    proposal.deal.status = DealStatus.AWARDED;
+
+    await this.proposalsRepo.save(proposal);
+    await this.dealsRepo.save(proposal.deal);
+
+    return proposal;
+  }
+
+  async getProposalsForDeal(dealId: string, currentUser: JwtRequestUser) {
+    const deal = await this.dealsRepo.findOne({
+      where: { id: dealId },
+      relations: ['organization', 'organization.owner'],
+    });
+    if (!deal) throw new NotFoundException('Deal not found');
+
+    const orgId = await this.resolveOrganizationId(currentUser);
+    if (deal.organization.id !== orgId) {
+      throw new ForbiddenException('You can only view proposals for your own deals');
+    }
+
+    return this.proposalsRepo.find({
+      where: { deal: { id: dealId } },
+      relations: ['provider'],
+      order: { createdAt: 'DESC' },
+    });
+  }
+
+  async adminApproveProposal(proposalId: string) {
+    const proposal = await this.proposalsRepo.findOne({
+      where: { id: proposalId },
+      relations: ['deal'],
+    });
+    if (!proposal) throw new NotFoundException('Proposal not found');
+    if (proposal.status !== ProposalStatus.SELECTED) {
+      throw new BadRequestException('Only selected proposals can be approved');
+    }
+
+    proposal.status = ProposalStatus.APPROVED;
+    return this.proposalsRepo.save(proposal);
   }
 
   private async notifyServiceProviders(dealId: string): Promise<void> {

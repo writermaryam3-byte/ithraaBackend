@@ -1,4 +1,4 @@
-import { IsDateString, IsInt, IsOptional, IsUUID, Min } from 'class-validator';
+import { IsDateString, IsEnum, IsInt, IsOptional, IsUUID, Min } from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
 
 export class StartEvaluationDto {
@@ -8,6 +8,13 @@ export class StartEvaluationDto {
   })
   @IsUUID()
   childId: string;
+
+  @ApiProperty({
+    description: 'Child type (organization or private)',
+    enum: ['organization', 'private'],
+  })
+  @IsEnum(['organization', 'private'])
+  childType: 'organization' | 'private';
 
   /**
    * Provide ONE of:

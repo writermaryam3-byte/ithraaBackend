@@ -14,21 +14,21 @@ import {
 } from './dto/create-child.dto';
 import { CreateChildByParentDto } from './dto/create-child-by-parent.dto';
 import { UpdateChildDto } from './dto/update-child.dto';
-import { Child } from './entities/child.entity';
+import { OrganizationChild } from './entities/organization-child.entity';
+import { PrivateChild } from './entities/private-child.entity';
 import { InjectRepository } from '@nestjs/typeorm';
-import { DataSource, IsNull, Repository } from 'typeorm';
+import { DataSource, Repository } from 'typeorm';
 import { OrganizationsService } from 'src/organizations/organizations.service';
 import { UsersService } from 'src/users/services/users.service';
-import { UserRole } from 'src/common/enums/role.enum';
 import { NotificationsService } from 'src/notifications/notifications.service';
 import { NotificationDelivery } from 'src/notifications/enums/notification-delivery.enum';
 import { JwtRequestUser } from 'src/common/interfaces/jwt-request-user.interface';
 import { ClassesService } from 'src/classes/classes.service';
 import { AttemptUsageService } from 'src/evaluations/attempt-usage.service';
-import { User } from 'src/users/entities/user.entity';
 import { TransferService } from './transfer.service';
-import { randomUUID } from 'crypto';
 import { ChildAccessPolicy } from './services/child-access-policy.service';
+import { ParentProfilesService } from 'src/users/services/parent-profiles.service';
+import { ParentOrganizationSource } from 'src/users/enums/parent-organization-source.enum';
 
 export type CreateChildResponse = {
   status: 'CREATED' | 'TRANSFER_REQUIRED';
@@ -40,8 +40,10 @@ export type CreateChildResponse = {
 @Injectable()
 export class ChildrenService {
   constructor(
-    @InjectRepository(Child)
-    private childrenRepository: Repository<Child>,
+    @InjectRepository(OrganizationChild)
+    private organizationChildrenRepository: Repository<OrganizationChild>,
+    @InjectRepository(PrivateChild)
+    private privateChildrenRepository: Repository<PrivateChild>,
     private usersService: UsersService,
     @Inject(forwardRef(() => ClassesService))
     private clsService: ClassesService,
@@ -51,59 +53,75 @@ export class ChildrenService {
     private attemptUsageservice: AttemptUsageService,
     private transferService: TransferService,
     private childAccessPolicy: ChildAccessPolicy,
+    private parentProfilesService: ParentProfilesService,
   ) {}
 
   async isPrivateChild(id: string) {
-    const child = await this.findOneOrFail(id);
-    return child.classId === null;
+    const child = await this.privateChildrenRepository.findOneBy({ id });
+    return !!child;
   }
 
-  async createChildByParent(parentId: string, dto: CreateChildByParentDto) {
-    const user = await this.usersService.findById(parentId);
-    const isParent = user.roles.some((r) => r.name === UserRole.PARENT);
-    if (!isParent) {
-      throw new ForbiddenException(
-        'Only parent users can add private children',
-      );
-    }
+  async createChildByParent(parentUserId: string, dto: CreateChildByParentDto) {
+    return this.dataSource.transaction(async (manager) => {
+      // Ensure ParentProfile exists for current user
+      const parentProfile =
+        await this.parentProfilesService.ensureParentProfileForUser(
+          parentUserId,
+          manager,
+        );
 
-    const privateChildCount = await this.childrenRepository.count({
-      where: { parent: { id: parentId }, classId: IsNull() },
-    });
-    if (privateChildCount >= 2) {
-      await this.notificationsService.enqueue({
-        delivery: NotificationDelivery.IN_APP,
-        userId: parentId,
-        title: 'Child limit reached',
-        message:
-          'You have reached the maximum of two private children on your account.',
+      // Count private children for this parent
+      const privateChildRepo = manager.getRepository(PrivateChild);
+      const privateChildCount = await privateChildRepo.count({
+        where: { parent: { id: parentProfile.id } },
       });
-      throw new BadRequestException('Child limit reached');
-    }
 
-    const child = await this.childrenRepository.save({
-      name: dto.name,
-      birthDate: dto.birthDate,
-      gender: dto.gender,
-      createdBy: { id: parentId },
-      parent: { id: parentId },
+      if (privateChildCount >= parentProfile.maxChildren) {
+        await this.notificationsService.enqueue({
+          delivery: NotificationDelivery.IN_APP,
+          userId: parentUserId,
+          title: 'Child limit reached',
+          message: `You have reached the maximum of ${parentProfile.maxChildren} children on your account.`,
+        });
+        throw new BadRequestException('Child limit reached');
+      }
+
+      // Create private child
+      const child = await privateChildRepo.save({
+        name: dto.name,
+        birthDate: dto.birthDate,
+        gender: dto.gender,
+        createdBy: { id: parentUserId },
+        parent: { id: parentProfile.id },
+      });
+
+      return child;
     });
-
-    return child;
   }
 
-  async findPrivateChildrenForParent(parentId: string) {
-    const [children, count] = await this.childrenRepository.findAndCount({
-      where: { parent: { id: parentId }, classId: IsNull() },
-      order: { createdAt: 'DESC' },
-    });
+  async findPrivateChildrenForParent(parentUserId: string) {
+    // Resolve ParentProfile for user
+    const parentProfile =
+      await this.parentProfilesService.findByUserId(parentUserId);
+    if (!parentProfile) {
+      return { children: [], count: 0 };
+    }
+
+    const [children, count] = await this.privateChildrenRepository.findAndCount(
+      {
+        where: {
+          parent: { id: parentProfile.id },
+        },
+        order: { createdAt: 'DESC' },
+      },
+    );
 
     return {
       children: await Promise.all(
         children.map(async (child) => {
           const usage = await this.attemptUsageservice.getUsage(
             child.id,
-            parentId,
+            parentProfile.id,
             this.dataSource.manager,
           );
 
@@ -118,22 +136,74 @@ export class ChildrenService {
     };
   }
 
-  async findOrgChildrenForParent(parentId: string) {
-    const organization = await this.organizationsService.findByParent(parentId);
-    const [children, count] = await this.childrenRepository.findAndCount({
-      where: {
-        parent: { id: parentId },
-        class: { organization: { id: organization.id } },
-      },
-      order: { createdAt: 'DESC' },
-    });
+  async findOrgChildrenForParent(parentUserId: string) {
+    // Resolve ParentProfile for user
+    const parentProfile =
+      await this.parentProfilesService.findByUserId(parentUserId);
+    if (!parentProfile) {
+      return { children: [], count: 0 };
+    }
+
+    // Get all organization-linked children for this parent (across all orgs)
+    const [children, count] =
+      await this.organizationChildrenRepository.findAndCount({
+        where: {
+          parent: { id: parentProfile.id },
+        },
+        relations: { organization: true, class: { grade: true } },
+        order: { createdAt: 'DESC' },
+      });
 
     return {
       children: await Promise.all(
         children.map(async (child) => {
           const usage = await this.attemptUsageservice.getUsage(
             child.id,
-            parentId,
+            parentProfile.id,
+            this.dataSource.manager,
+          );
+
+          return {
+            ...child,
+            retakeUsed: usage.hasRetake,
+            attemptsUsed: usage.totalAttempts,
+          };
+        }),
+      ),
+      count,
+    };
+  }
+
+  /**
+   * Optional: Get organization children for a specific parent and organization.
+   */
+  async findOrgChildrenForParentByOrganization(
+    parentUserId: string,
+    organizationId: string,
+  ) {
+    // Resolve ParentProfile for user
+    const parentProfile =
+      await this.parentProfilesService.findByUserId(parentUserId);
+    if (!parentProfile) {
+      return { children: [], count: 0 };
+    }
+
+    const [children, count] =
+      await this.organizationChildrenRepository.findAndCount({
+        where: {
+          parent: { id: parentProfile.id },
+          organization: { id: organizationId },
+        },
+        relations: { class: { grade: true } },
+        order: { createdAt: 'DESC' },
+      });
+
+    return {
+      children: await Promise.all(
+        children.map(async (child) => {
+          const usage = await this.attemptUsageservice.getUsage(
+            child.id,
+            parentProfile.id,
             this.dataSource.manager,
           );
 
@@ -155,6 +225,7 @@ export class ChildrenService {
     return this.dataSource.transaction(async (manager) => {
       const cls = await this.clsService.findOneOrFail(dto.classId);
       const currentOrganizationId = cls.organization.id;
+
       if (
         !(await this.organizationsService.isOrgMember(
           currentUser.userId,
@@ -170,103 +241,71 @@ export class ChildrenService {
         currentOrganizationId,
       );
 
-      await this.usersService.findById(currentUser.userId);
-
-      const userRepo = manager.getRepository(User);
-      const parentEmail = dto.parentEmail?.toLowerCase().trim();
-      const parentMatches = await userRepo.find({
-        where: [
-          { phone: dto.parentPhone },
-          ...(parentEmail ? [{ email: parentEmail }] : []),
-        ],
-        relations: ['roles'],
-      });
-      const parentIds = new Set(parentMatches.map((user) => user.id));
-      if (parentIds.size > 1) {
-        throw new ConflictException(
-          'The provided phone and email belong to different accounts',
-        );
-      }
-
-      let parent = parentMatches[0];
-      if (parent) {
-        if (!parent.roles?.some((role) => role.name === UserRole.PARENT)) {
-          parent = await this.usersService.addRolesToUser(
-            parent.id,
-            [UserRole.PARENT],
-            manager,
-          );
-        }
-
-        const parentPatch: Partial<User> = {};
-        if (dto.parentName) parentPatch.name = dto.parentName;
-        if (parentEmail) parentPatch.email = parentEmail;
-        parentPatch.phone = dto.parentPhone;
-
-        if (Object.keys(parentPatch).length > 0) {
-          parent = await this.usersService.updateUser(
-            parent.id,
-            parentPatch,
-            manager,
-          );
-        }
-      } else {
-        if (!dto.parentName) {
-          throw new ConflictException(
-            'parentName is required when creating a new parent',
-          );
-        }
-        const tempPassword = this.createTemporaryPassword();
-        console.log(tempPassword);
-        parent = await this.usersService.create(
+      // Get or create parent profile using ParentProfilesService
+      const parentProfile =
+        await this.parentProfilesService.getOrCreateParentByContact(
           {
             name: dto.parentName,
-            email:
-              parentEmail ?? this.createPlaceholderParentEmail(dto.parentPhone),
+            email: dto.parentEmail,
             phone: dto.parentPhone,
-            password: tempPassword,
           },
-          [UserRole.PARENT],
           manager,
         );
 
-        // Send temporary password
-        await this.notificationsService.enqueue({
-          userId: parent.id,
-          title: 'Your Account Has Been Created',
-          message: `Your temporary password is: ${tempPassword}. Please change it after logging in.`,
-          delivery: NotificationDelivery.EMAIL,
-          email: parent.email,
-        });
+      console.log(parentProfile);
 
-        // Send email verification
+      // Link parent to organization if not already linked
+      await this.parentProfilesService.linkParentToOrganization(
+        parentProfile.id,
+        currentOrganizationId,
+        ParentOrganizationSource.CHILD_REGISTRATION,
+        manager,
+      );
+
+      // Check parent's total children limit
+      const privateChildRepo = manager.getRepository(PrivateChild);
+      const orgChildRepo = manager.getRepository(OrganizationChild);
+      const privateChildCount = await privateChildRepo.count({
+        where: { parent: { id: parentProfile.id } },
+      });
+      const orgChildCount = await orgChildRepo.count({
+        where: { parent: { id: parentProfile.id } },
+      });
+      const totalChildCount = privateChildCount + orgChildCount;
+
+      if (totalChildCount >= parentProfile.maxChildren) {
         await this.notificationsService.enqueue({
-          userId: parent.id,
-          title: 'Verify Your Email',
-          message:
-            'Please verify your email address to activate your account and receive important notifications.',
-          delivery: NotificationDelivery.VERIFY_EMAIL,
-          email: parent.email,
+          delivery: NotificationDelivery.IN_APP,
+          userId: parentProfile.userId,
+          title: 'Child limit reached',
+          message: `Parent has reached the maximum of ${parentProfile.maxChildren} children on their account.`,
         });
+        throw new ForbiddenException(
+          `Parent has reached the child limit (${parentProfile.maxChildren}). Please request additional capacity.`,
+        );
       }
 
-      const childRepo = manager.getRepository(Child);
-      const existingChild = await childRepo.findOne({
+      // Check for existing organization child by birthDate and ParentProfile
+      const existingChild = await orgChildRepo.findOne({
         where: {
           birthDate: dto.birthDate,
-          parentId: parent.id,
+          parent: { id: parentProfile.id },
         },
       });
 
       if (existingChild) {
-        if (existingChild.organizationId === currentOrganizationId) {
+        if (existingChild.organization.id === currentOrganizationId) {
           throw new ConflictException('Child already exists in your school');
         }
 
+        // Transfer flow: child exists in another org for same parent
         const transfer = await this.transferService.requestTransfer(
           existingChild.id,
+          'organization',
           currentOrganizationId,
-          manager,
+          currentUser.userId,
+          currentUser.email || '',
+          (currentUser.roles || []).map((r) => r.name),
         );
 
         return {
@@ -278,14 +317,15 @@ export class ChildrenService {
         };
       }
 
-      const child = await childRepo.save({
+      // Create new organization child
+      const child = await orgChildRepo.save({
         name: dto.name,
         birthDate: dto.birthDate,
         gender: dto.gender,
         classId: dto.classId,
         organizationId: currentOrganizationId,
         createdBy: { id: currentUser.userId },
-        parent: { id: parent.id },
+        parent: { id: parentProfile.id },
       });
 
       return {
@@ -311,19 +351,15 @@ export class ChildrenService {
     );
   }
 
-  private createTemporaryPassword() {
-    return `Temp-${randomUUID()}aA1!`;
-  }
-
-  private createPlaceholderParentEmail(phone: string) {
-    const normalizedPhone = phone.replace(/\D/g, '');
-    return `parent-${normalizedPhone}-${randomUUID()}@placeholder.ithraa.local`;
-  }
-
   async findAll() {
-    const [children, count] = await this.childrenRepository.findAndCount();
-
-    return { children, count };
+    const [orgChildren, orgCount] =
+      await this.organizationChildrenRepository.findAndCount();
+    const [privateChildren, privateCount] =
+      await this.privateChildrenRepository.findAndCount();
+    return {
+      children: [...orgChildren, ...privateChildren],
+      count: orgCount + privateCount,
+    };
   }
 
   async findAllByOrganization(orgId: string, currentUser: JwtRequestUser) {
@@ -335,9 +371,9 @@ export class ChildrenService {
       );
     }
 
-    const children = await this.childrenRepository.find({
+    const children = await this.organizationChildrenRepository.find({
       where: {
-        organizationId: orgId,
+        organization: { id: orgId },
       },
       relations: { class: { grade: true } },
     });
@@ -354,10 +390,18 @@ export class ChildrenService {
   async findByUser(userId: string, actor: JwtRequestUser) {
     this.childAccessPolicy.assertCanListChildrenForUser(userId, actor);
 
-    const [children, count] = await this.childrenRepository.findAndCount({
-      where: { createdBy: { id: userId } },
-    });
-    return { children, count };
+    const [orgChildren, orgCount] =
+      await this.organizationChildrenRepository.findAndCount({
+        where: { createdBy: { id: userId } },
+      });
+    const [privateChildren, privateCount] =
+      await this.privateChildrenRepository.findAndCount({
+        where: { createdBy: { id: userId } },
+      });
+    return {
+      children: [...orgChildren, ...privateChildren],
+      count: orgCount + privateCount,
+    };
   }
 
   async findOne(id: string, actor: JwtRequestUser) {
@@ -366,34 +410,52 @@ export class ChildrenService {
   }
 
   async findOneOrFail(id: string) {
-    const child = await this.childrenRepository.findOneBy({ id });
-    if (!child) throw new NotFoundException('child not found');
-    return child;
+    const orgChild = await this.organizationChildrenRepository.findOneBy({
+      id,
+    });
+    if (orgChild) return orgChild;
+
+    const privateChild = await this.privateChildrenRepository.findOneBy({ id });
+    if (privateChild) return privateChild;
+
+    throw new NotFoundException('child not found');
   }
+
+  async save(child: OrganizationChild | PrivateChild) {
+    if (child instanceof OrganizationChild) {
+      return this.organizationChildrenRepository.save(child);
+    }
+    return this.privateChildrenRepository.save(child);
+  }
+
   async update(
     id: string,
     updateChildDto: UpdateChildDto,
     actor: JwtRequestUser,
   ) {
-    await this.childAccessPolicy.assertCanModifyChild(id, actor);
-    const child = await this.childrenRepository.preload({
-      id,
+    const child = await this.childAccessPolicy.assertCanModifyChild(id, actor);
+
+    if (child instanceof OrganizationChild) {
+      const updated = await this.organizationChildrenRepository.save({
+        ...child,
+        ...updateChildDto,
+      });
+      return updated;
+    }
+
+    const updated = await this.privateChildrenRepository.save({
+      ...child,
       ...updateChildDto,
     });
-    if (!child) throw new NotFoundException('child not found');
-    return this.childrenRepository.save(child);
-  }
-
-  save(child: Child) {
-    return this.childrenRepository.save(child);
+    return updated;
   }
 
   async remove(id: string, actor: JwtRequestUser) {
-    await this.childAccessPolicy.assertCanModifyChild(id, actor);
-    const result = await this.childrenRepository.delete(id);
-    if (result.affected === 0) {
-      throw new NotFoundException('child not found');
+    const child = await this.childAccessPolicy.assertCanModifyChild(id, actor);
+
+    if (child instanceof OrganizationChild) {
+      return this.organizationChildrenRepository.remove(child);
     }
-    return { message: 'Deleted successfully' };
+    return this.privateChildrenRepository.remove(child);
   }
 }

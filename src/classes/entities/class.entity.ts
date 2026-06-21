@@ -1,4 +1,4 @@
-import { Child } from 'src/children/entities/child.entity';
+import { OrganizationChild } from 'src/children/entities/organization-child.entity';
 import { Grade } from 'src/grades/entities/grade.entity';
 import { Organization } from 'src/organizations/entities/organization.entity';
 import { Teacher } from 'src/users/entities/teacher.entity';
@@ -29,8 +29,8 @@ export class Class {
   @JoinColumn({ name: 'teacherId' })
   teacher: Teacher | null;
 
-  @OneToMany(() => Child, (child) => child.class)
-  children: Child[];
+  @OneToMany(() => OrganizationChild, (child) => child.class)
+  children: OrganizationChild[];
 
   @ManyToOne(() => Organization, (org) => org.classes, { onDelete: 'CASCADE' })
   @JoinColumn({ name: 'orgId' })

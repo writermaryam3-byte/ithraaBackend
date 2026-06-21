@@ -15,6 +15,7 @@ import {
   EvaluationAccessPolicy,
   EvaluationActor,
 } from './evaluation-access-policy.service';
+import { getChildId } from 'src/common/helpers/child-resolver.helper';
 
 @Injectable()
 export class EvaluationApprovalService {
@@ -84,7 +85,7 @@ export class EvaluationApprovalService {
         attemptId: attempt.id,
         evaluationId: attempt.evaluationId,
         parentId: attempt.parentId,
-        childId: attempt.childId,
+        childId: getChildId(attempt) || '',
         approvedBy: actor.userId,
         approvedAt: approval.approvedAt,
       };
@@ -98,7 +99,8 @@ export class EvaluationApprovalService {
           },
           approval: true,
           evaluation: true,
-          child: true,
+          organizationChild: true,
+          privateChild: true,
         },
       });
     });

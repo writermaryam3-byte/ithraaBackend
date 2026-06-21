@@ -90,9 +90,10 @@ export class CreateEvaluationDto {
   @IsEnum(EvaluationType)
   type: EvaluationType;
 
-  @ApiProperty({ format: 'uuid' })
+  @ApiProperty({ format: 'uuid', required: false })
+  @IsOptional()
   @IsUUID()
-  institutionId: string;
+  institutionId?: string | null;
 
   @ApiProperty({ example: 3, required: false })
   @IsOptional()

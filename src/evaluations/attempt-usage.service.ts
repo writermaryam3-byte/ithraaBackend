@@ -11,10 +11,13 @@ export class AttemptUsageService {
     private readonly attemptRepo: Repository<EvaluationAttempt>,
   ) {}
 
-  async getUsage(childId: string, parentId: string, manager?: EntityManager) {
+  async getUsage(childId: string, parentProfileId: string, manager?: EntityManager) {
     const repo = manager?.getRepository(EvaluationAttempt) ?? this.attemptRepo;
     const attempts = await repo.find({
-      where: { childId, parentId },
+      where: [
+        { organizationChildId: childId, parentId: parentProfileId },
+        { privateChildId: childId, parentId: parentProfileId },
+      ],
       order: { attemptNumber: 'ASC' },
     });
 

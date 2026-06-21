@@ -13,7 +13,7 @@ import { PaymentStatusEnum } from '../enums/payment-status.enum';
 import { PaymentProviderEnum } from '../enums/payment-provider.enum';
 
 export type PaymentMetadata = {
-  childId?: string;
+  privateChildId?: string;
   attemptRequestId?: string;
   privateAttemptId?: string;
   description?: string;
@@ -36,7 +36,7 @@ export class Payment {
 
   @Index()
   @Column({ type: 'uuid', nullable: true })
-  childId: string | null;
+  privateChildId: string | null;
 
   @Index()
   @Column({ type: 'uuid', nullable: true })

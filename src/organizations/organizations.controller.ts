@@ -47,6 +47,13 @@ export class OrganizationsController {
     return this.organizationsService.findByOwnerResponse(req.user.userId);
   }
 
+  @Roles(UserRole.ADMIN, UserRole.PARENT)
+  @Get('by-parent/:parentProfileId')
+  @ApiOperation({ summary: 'Get organization linked to a parent profile' })
+  findByParentProfile(@Param('parentProfileId', new ParseUUIDPipe()) parentProfileId: string) {
+    return this.organizationsService.findByParent(parentProfileId);
+  }
+
   @Get('owner/:ownerId')
   @ApiOperation({ summary: 'Get organization by owner id (admin or self)' })
   async findByOwner(
@@ -85,6 +92,7 @@ export class OrganizationsController {
     );
   }
 
+  @Roles(UserRole.ADMIN, UserRole.ORGANIZATIONOWNER)
   @Get(':id')
   @ApiOperation({ summary: 'Get organization by id (admin or owner)' })
   async findOne(
@@ -96,6 +104,7 @@ export class OrganizationsController {
     return this.organizationsService.findOne(id);
   }
 
+  @Roles(UserRole.ADMIN, UserRole.ORGANIZATIONOWNER)
   @ApiOperation({ summary: 'Update organization profile fields (admin or owner)' })
   @Patch(':id')
   update(

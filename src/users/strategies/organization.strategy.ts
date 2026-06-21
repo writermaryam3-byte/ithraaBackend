@@ -20,7 +20,6 @@ export class OrganizationSignupStrategy implements SignupStrategy {
 
     await manager.save(organization);
 
-    user.organization = organization;
     user.ownedOrganization = organization;
 
     await manager.save(user);

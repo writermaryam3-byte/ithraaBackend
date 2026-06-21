@@ -4,6 +4,7 @@ import {
   Injectable,
   NotFoundException,
   ForbiddenException,
+  BadRequestException,
 } from '@nestjs/common';
 import { CreateClassDto } from './dto/create-class.dto';
 import { UpdateClassDto } from './dto/update-class.dto';
@@ -14,6 +15,7 @@ import { AdminClassResponse } from './dto/admin-class-response.dto';
 import { GradesService } from 'src/grades/grades.service';
 import { OrgOwnerClassResponse } from './dto/orgOwner-class-response.dto';
 import { ChildrenService } from 'src/children/children.service';
+import { PrivateChild } from 'src/children/entities/private-child.entity';
 import { Teacher } from 'src/users/entities/teacher.entity';
 import { OrganizationsService } from 'src/organizations/organizations.service';
 import { JwtRequestUser } from 'src/common/interfaces/jwt-request-user.interface';
@@ -188,7 +190,10 @@ export class ClassesService {
     await this.orgService.assertOrganizationApproved(cls.organization.id);
 
     const child = await this.childrenService.findOneOrFail(childId);
-    child.class = cls;
+    if (child instanceof PrivateChild) {
+      throw new BadRequestException('Cannot assign private child to class');
+    }
+    (child as any).class = cls;
     await this.childrenService.save(child);
     return { message: 'child asigned successfully' };
   }

@@ -13,6 +13,9 @@ import { Activity } from './entities/activity.entity';
 import { Deal } from './entities/deal.entity';
 import { Proposal } from './entities/proposal.entity';
 import { IsFutureDateConstraint } from './dto/create-deal.dto';
+import { AuditLoggingService } from 'src/common/services/audit-logging.service';
+import { AuditLog } from 'src/common/entities/audit-log.entity';
+import { DealAccessPolicy } from './policies/deal-access.policy';
 
 @Module({
   imports: [
@@ -23,10 +26,18 @@ import { IsFutureDateConstraint } from './dto/create-deal.dto';
       User,
       Organization,
       Teacher,
+      AuditLog,
     ]),
     NotificationsModule,
   ],
   controllers: [DealsController, ProposalsController, ActivitiesController],
-  providers: [DealsService, ActivitiesService, IsFutureDateConstraint],
+  providers: [
+    DealsService,
+    ActivitiesService,
+    IsFutureDateConstraint,
+    AuditLoggingService,
+    DealAccessPolicy,
+  ],
+  exports: [DealsService],
 })
 export class DealsModule {}

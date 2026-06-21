@@ -60,13 +60,13 @@ export class OrganizationsService {
   }
 
   async findByParent(id: string) {
-    const org = await this.organizationRepository.findOne({
-      where: {
-        users: {
-          id,
-        },
-      },
-    });
+    const org = await this.organizationRepository
+      .createQueryBuilder('org')
+      .leftJoin('parent_organizations', 'link', 'link.organizationId = org.id')
+      .leftJoin('organization_children', 'child', 'child.organizationId = org.id')
+      .where('link.parentId = :parentId', { parentId: id })
+      .orWhere('child.parentId = :parentId', { parentId: id })
+      .getOne();
 
     if (!org) {
       throw new NotFoundException(

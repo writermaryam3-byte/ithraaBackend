@@ -28,24 +28,48 @@ export class ActivitiesController {
     return this.activitiesService.create(dto);
   }
 
+  @Roles(
+    UserRole.ADMIN,
+    UserRole.ORGANIZATIONOWNER,
+    UserRole.TEACHER,
+    UserRole.ENRICHER,
+  )
   @Get()
   @ApiOperation({ summary: 'Get all activities' })
   findAll() {
     return this.activitiesService.findAll();
   }
 
+  @Roles(
+    UserRole.ADMIN,
+    UserRole.ORGANIZATIONOWNER,
+    UserRole.TEACHER,
+    UserRole.ENRICHER,
+  )
   @Get('with-deals')
   @ApiOperation({ summary: 'Get all activities with deals' })
   findAllWithDeals() {
     return this.activitiesService.findAllWithDeals();
   }
 
+  @Roles(
+    UserRole.ADMIN,
+    UserRole.ORGANIZATIONOWNER,
+    UserRole.TEACHER,
+    UserRole.ENRICHER,
+  )
   @Get(':id')
   @ApiOperation({ summary: 'Get one activity by id' })
   findOne(@Param('id', new ParseUUIDPipe()) id: string) {
     return this.activitiesService.findOne(id);
   }
 
+  @Roles(
+    UserRole.ADMIN,
+    UserRole.ORGANIZATIONOWNER,
+    UserRole.TEACHER,
+    UserRole.ENRICHER,
+  )
   @Get(':id/with-deals')
   @ApiOperation({ summary: 'Get one activity with its deals' })
   findOneWithDeals(@Param('id', new ParseUUIDPipe()) id: string) {

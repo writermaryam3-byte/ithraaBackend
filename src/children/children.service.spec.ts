@@ -5,8 +5,10 @@ import { AttemptUsageService } from 'src/evaluations/attempt-usage.service';
 import { NotificationsService } from 'src/notifications/notifications.service';
 import { OrganizationsService } from 'src/organizations/organizations.service';
 import { UsersService } from 'src/users/services/users.service';
+import { ParentProfilesService } from 'src/users/services/parent-profiles.service';
 import { DataSource } from 'typeorm';
-import { Child } from './entities/child.entity';
+import { OrganizationChild } from './entities/organization-child.entity';
+import { PrivateChild } from './entities/private-child.entity';
 import { ChildrenService } from './children.service';
 import { TransferService } from './transfer.service';
 import { ChildAccessPolicy } from './services/child-access-policy.service';
@@ -18,7 +20,8 @@ describe('ChildrenService', () => {
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         ChildrenService,
-        { provide: getRepositoryToken(Child), useValue: {} },
+        { provide: getRepositoryToken(OrganizationChild), useValue: {} },
+        { provide: getRepositoryToken(PrivateChild), useValue: {} },
         { provide: UsersService, useValue: {} },
         { provide: ClassesService, useValue: {} },
         { provide: OrganizationsService, useValue: {} },
@@ -27,6 +30,7 @@ describe('ChildrenService', () => {
         { provide: AttemptUsageService, useValue: {} },
         { provide: TransferService, useValue: {} },
         { provide: ChildAccessPolicy, useValue: {} },
+        { provide: ParentProfilesService, useValue: {} },
       ],
     }).compile();
 

@@ -1,9 +1,11 @@
 import {
   Body,
   Controller,
+  Get,
   Param,
   ParseUUIDPipe,
   Post,
+  Query,
   Req,
 } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
@@ -27,6 +29,30 @@ export class DealsController {
     return this.dealsService.createDeal(dto, req.user);
   }
 
+  @Get()
+  @Roles(UserRole.ORGANIZATIONOWNER, UserRole.TEACHER, UserRole.ENRICHER)
+  @ApiOperation({ summary: 'List deals' })
+  listDeals(@Query('status') status?: string) {
+    return this.dealsService.listDeals(status);
+  }
+
+  @Get(':dealId')
+  @Roles(UserRole.ORGANIZATIONOWNER, UserRole.TEACHER, UserRole.ENRICHER)
+  @ApiOperation({ summary: 'Get deal details' })
+  getDeal(@Param('dealId', new ParseUUIDPipe()) dealId: string) {
+    return this.dealsService.findOne(dealId);
+  }
+
+  @Get(':dealId/proposals')
+  @Roles(UserRole.ORGANIZATIONOWNER)
+  @ApiOperation({ summary: 'List proposals for a deal (org owner)' })
+  getProposals(
+    @Param('dealId', new ParseUUIDPipe()) dealId: string,
+    @Req() req: AuthRequest,
+  ) {
+    return this.dealsService.getProposalsForDeal(dealId, req.user);
+  }
+
   @Post(':dealId/proposals')
   @Roles(UserRole.ENRICHER)
   @ApiOperation({ summary: 'Submit a proposal for a deal' })
@@ -36,5 +62,24 @@ export class DealsController {
     @Req() req: AuthRequest,
   ) {
     return this.dealsService.submitProposal(dealId, dto, req.user);
+  }
+
+  @Post(':dealId/proposals/:proposalId/select')
+  @Roles(UserRole.ORGANIZATIONOWNER)
+  @ApiOperation({ summary: 'Select a winning proposal' })
+  selectProposal(
+    @Param('proposalId', new ParseUUIDPipe()) proposalId: string,
+    @Req() req: AuthRequest,
+  ) {
+    return this.dealsService.selectProposal(proposalId, req.user);
+  }
+
+  @Post(':dealId/proposals/:proposalId/approve')
+  @Roles(UserRole.ADMIN)
+  @ApiOperation({ summary: 'Admin approve a selected proposal' })
+  adminApproveProposal(
+    @Param('proposalId', new ParseUUIDPipe()) proposalId: string,
+  ) {
+    return this.dealsService.adminApproveProposal(proposalId);
   }
 }

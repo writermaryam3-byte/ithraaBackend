@@ -9,6 +9,7 @@ import { UserRole } from 'src/common/enums/role.enum';
 import { SessionService } from 'src/session/session.service';
 import { User } from 'src/users/entities/user.entity';
 import { DataSource } from 'typeorm';
+import { ParentSignupDto } from '../dto/parent-signup.dto';
 import { AccountType } from 'src/common/enums/account-type.enum';
 import { Role } from 'src/users/entities/user-roles.entity';
 import { SignupStrategyFactory } from '../factories/signup.factory';
@@ -16,6 +17,7 @@ import { BeneficiariesSignupDto } from '../dto/beneficiaries/beneficiaries-signu
 import { EnrichersSignupDto } from '../dto/enrichers/enrichers-signup.dto';
 import { UsersService } from './users.service';
 import { Enricher } from '../entities/enricher.entity';
+import { ParentProfile } from 'src/users/entities/parent-profile.entity';
 import { Organization } from 'src/organizations/entities/organization.entity';
 import { NotificationsService } from 'src/notifications/notifications.service';
 import { NotificationDelivery } from 'src/notifications/enums/notification-delivery.enum';
@@ -212,6 +214,40 @@ export class AuthProvider {
         email: user.email,
       });
       return { user, enricher };
+    });
+  }
+
+  async parentSignup(dto: ParentSignupDto) {
+    return this.dataSource.transaction(async (manager) => {
+      const user = await this.usersService.create(
+        {
+          email: dto.email,
+          phone: dto.phone,
+          name: dto.name,
+          password: dto.password,
+        },
+        [UserRole.PARENT],
+        manager,
+      );
+
+      let parentProfile = await manager.findOne(ParentProfile, {
+        where: { userId: user.id },
+      });
+
+      if (!parentProfile) {
+        parentProfile = manager.create(ParentProfile, { userId: user.id });
+        await manager.save(parentProfile);
+      }
+
+      await this.notificationsService.enqueue({
+        userId: user.id,
+        title: 'Welcome 🎉',
+        message: `Welcome ${user.name}, we're happy to have you معنا!`,
+        delivery: NotificationDelivery.BOTH,
+        email: user.email,
+      });
+
+      return { user, parentProfile };
     });
   }
 }

@@ -3,7 +3,8 @@ import { ChildrenService } from './children.service';
 import { ChildrenController } from './children.controller';
 import { ParentChildrenController } from './parent-children.controller';
 import { TypeOrmModule } from '@nestjs/typeorm';
-import { Child } from './entities/child.entity';
+import { OrganizationChild } from './entities/organization-child.entity';
+import { PrivateChild } from './entities/private-child.entity';
 import { ChildProfile } from './entities/child-profile.entity';
 import { ChildReport } from './entities/child-report.entity';
 import { TransferRequest } from './entities/transfer-request.entity';
@@ -15,6 +16,7 @@ import { EvaluationsModule } from 'src/evaluations/evaluations.module';
 import { TransferService } from './transfer.service';
 import { TransfersController } from './transfers.controller';
 import { ChildAccessPolicy } from './services/child-access-policy.service';
+import { TransferAccessPolicy } from './policies/transfer-access.policy';
 
 @Module({
   controllers: [
@@ -22,10 +24,16 @@ import { ChildAccessPolicy } from './services/child-access-policy.service';
     ParentChildrenController,
     TransfersController,
   ],
-  providers: [ChildrenService, TransferService, ChildAccessPolicy],
+  providers: [
+    ChildrenService,
+    TransferService,
+    TransferAccessPolicy,
+    ChildAccessPolicy,
+  ],
   imports: [
     TypeOrmModule.forFeature([
-      Child,
+      OrganizationChild,
+      PrivateChild,
       ChildProfile,
       ChildReport,
       TransferRequest,

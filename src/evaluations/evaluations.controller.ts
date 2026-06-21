@@ -53,7 +53,7 @@ export class EvaluationsController {
     });
   }
 
-  // @Roles(UserRole.PARENT)
+  @Roles(UserRole.PARENT)
   @Get('available/:childId')
   @ApiOperation({ summary: 'Get available evaluations for a child by age' })
   getAvailableForChild(

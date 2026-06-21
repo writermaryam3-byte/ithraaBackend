@@ -2,7 +2,7 @@ export interface OwnerClassEvaluationStatus {
   classId: string;
   className: string;
   children: {
-    childId: string;
+    organizationChildId: string;
     childName: string;
     className: string;
     status: 'not_started' | 'in_progress' | 'submitted' | 'approved';

@@ -25,7 +25,7 @@ export class CreatePaymentDto implements CreatePaymentFields {
 
   @ApiProperty({ format: 'uuid' })
   @IsUUID()
-  childId: string;
+  privateChildId: string;
 
   @ApiPropertyOptional({
     format: 'uuid',

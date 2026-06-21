@@ -11,7 +11,7 @@ export interface OwnerClassEvaluationSummary {
     score: number;
   }[];
   children: {
-    childId: string;
+    organizationChildId: string;
     childName: string;
     className: string;
     topResultLabel: string | null;
