@@ -1,5 +1,4 @@
 import { Class } from 'src/classes/entities/class.entity';
-import { GradeName } from 'src/common/enums/grade-name.enum';
 import { Organization } from 'src/organizations/entities/organization.entity';
 import {
   PrimaryGeneratedColumn,
@@ -17,7 +16,7 @@ export class Grade {
   id: string;
 
   @Column()
-  name: GradeName;
+  name: string;
 
   @Index()
   @Column({ type: 'uuid' })

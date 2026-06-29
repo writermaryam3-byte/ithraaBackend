@@ -1,15 +1,13 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { IsString, IsNotEmpty, IsUUID, IsEnum } from 'class-validator';
-import { GradeName } from 'src/common/enums/grade-name.enum';
+import { IsString, IsNotEmpty, IsUUID } from 'class-validator';
 
 export class CreateGradeDto {
   @ApiProperty({
-    example: GradeName.GradeOne,
+    example: 'grade one',
   })
   @IsString()
   @IsNotEmpty()
-  @IsEnum(GradeName)
-  name: GradeName;
+  name: string;
 
   @ApiProperty({
     description: 'organization ID',

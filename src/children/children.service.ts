@@ -291,6 +291,7 @@ export class ChildrenService {
           birthDate: dto.birthDate,
           parent: { id: parentProfile.id },
         },
+        relations: ['organization'],
       });
 
       if (existingChild) {

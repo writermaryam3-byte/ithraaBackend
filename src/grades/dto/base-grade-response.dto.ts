@@ -1,6 +1,4 @@
-import { GradeName } from 'src/common/enums/grade-name.enum';
-
 export interface BaseGradeResponseDto {
-  name: GradeName;
+  name: string;
   id: string;
 }
