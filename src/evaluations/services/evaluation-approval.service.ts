@@ -28,16 +28,14 @@ export class EvaluationApprovalService {
   async approveAttempt(attemptId: string, actor: EvaluationActor) {
     this.access.assertHasRole(actor, [UserRole.ADMIN]);
 
-    let eventPayload:
-      | {
-          attemptId: string;
-          evaluationId: string;
-          parentId: string;
-          childId: string;
-          approvedBy: string;
-          approvedAt: Date;
-        }
-      | null = null;
+    let eventPayload: {
+      attemptId: string;
+      evaluationId: string;
+      parentId: string;
+      childId: string;
+      approvedBy: string;
+      approvedAt: Date;
+    } | null = null;
 
     const approved = await this.dataSource.transaction(async (manager) => {
       const attemptRepo = manager.getRepository(EvaluationAttempt);

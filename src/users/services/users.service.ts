@@ -79,7 +79,7 @@ export class UsersService {
   async getOrganizationOwner(id: string) {
     const user = await this.userRepo.findOne({
       where: { id },
-      relations: ['organization'],
+      relations: ['ownedOrganization'],
     });
     return { user };
   }
