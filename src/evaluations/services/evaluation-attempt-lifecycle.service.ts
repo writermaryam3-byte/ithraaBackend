@@ -22,8 +22,6 @@ import {
 } from './evaluation-access-policy.service';
 import { EvaluationSlotService } from './evaluation-slot.service';
 import { ParentProfilesService } from 'src/users/services/parent-profiles.service';
-import { resolveChild, getChildId, getChildType } from 'src/common/helpers/child-resolver.helper';
-
 @Injectable()
 export class EvaluationAttemptLifecycleService {
   constructor(
@@ -64,13 +62,13 @@ export class EvaluationAttemptLifecycleService {
 
     let child: OrganizationChild | PrivateChild;
     let isPrivateChild: boolean;
-    
+
     // Try to find as private child first
     const privateChild = await this.privateChildren.findOne({
       where: { id: dto.childId, parent: { id: parentProfile.id } },
       relations: { parent: true },
     });
-    
+
     if (privateChild) {
       child = privateChild;
       isPrivateChild = true;
@@ -80,11 +78,11 @@ export class EvaluationAttemptLifecycleService {
         where: { id: dto.childId },
         relations: { parent: true, class: { organization: true } },
       });
-      
+
       if (!orgChild || orgChild.parent.id !== parentProfile.id) {
         throw new ForbiddenException('Child not found for this parent');
       }
-      
+
       child = orgChild;
       isPrivateChild = false;
     }
@@ -92,7 +90,8 @@ export class EvaluationAttemptLifecycleService {
     if (
       !isPrivateChild &&
       evaluation.institutionId != null &&
-      evaluation.institutionId !== (child as OrganizationChild).class?.organization?.id
+      evaluation.institutionId !==
+        (child as OrganizationChild).class?.organization?.id
     ) {
       throw new ForbiddenException(
         'Evaluation does not belong to child institution',
@@ -108,15 +107,13 @@ export class EvaluationAttemptLifecycleService {
     }
 
     const expiresAt = this.resolveExpiresAt(dto);
-    let limitReachedPayload:
-      | {
-          evaluationId: string;
-          parentId: string;
-          childId: string;
-          attempts: number;
-          reason: string;
-        }
-      | null = null;
+    let limitReachedPayload: {
+      evaluationId: string;
+      parentId: string;
+      childId: string;
+      attempts: number;
+      reason: string;
+    } | null = null;
 
     const attempt = await this.dataSource.transaction(async (manager) => {
       const repo = manager.getRepository(EvaluationAttempt);
@@ -125,13 +122,13 @@ export class EvaluationAttemptLifecycleService {
         evaluationId,
         parentId: parentProfile.id,
       };
-      
+
       if (isPrivateChild) {
         whereClause.privateChildId = dto.childId;
       } else {
         whereClause.organizationChildId = dto.childId;
       }
-      
+
       const attempts = await repo.find({
         where: whereClause,
         order: { attemptNumber: 'DESC' },
@@ -200,14 +197,16 @@ export class EvaluationAttemptLifecycleService {
         result: null,
         submittedAt: null,
       };
-      
+
       if (isPrivateChild) {
         createData.privateChildId = dto.childId;
       } else {
         createData.organizationChildId = dto.childId;
       }
-      
-      const saved = await repo.save(repo.create(createData)) as unknown as EvaluationAttempt;
+
+      const saved = (await repo.save(
+        repo.create(createData),
+      )) as unknown as EvaluationAttempt;
 
       if (isPrivateChild && entitlementId) {
         await this.slots.linkEvaluationToEntitlement(

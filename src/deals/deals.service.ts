@@ -22,7 +22,6 @@ import { Activity } from './entities/activity.entity';
 import { Deal } from './entities/deal.entity';
 import { Proposal } from './entities/proposal.entity';
 import { AuditLoggingService } from 'src/common/services/audit-logging.service';
-import { AuditAction } from 'src/common/enums/audit-action.enum';
 import { DealAccessPolicy } from './policies/deal-access.policy';
 
 @Injectable()
@@ -80,17 +79,21 @@ export class DealsService {
     });
 
     const savedDeal = await this.dealsRepo.save(deal);
-    
+
     await this.auditService.logCreate(
       currentUser.userId,
       currentUser.email || '',
-      currentUser.roles.map(r => r.name).join(','),
+      currentUser.roles.map((r) => r.name).join(','),
       'Deal',
       savedDeal.id,
-      { activityId: dto.activityId, studentsCount: dto.studentsCount, deadline: dto.deadline },
+      {
+        activityId: dto.activityId,
+        studentsCount: dto.studentsCount,
+        deadline: dto.deadline,
+      },
       'Created deal',
     );
-    
+
     await this.notifyServiceProviders(savedDeal.id);
 
     return savedDeal;
@@ -246,7 +249,9 @@ export class DealsService {
 
     const orgId = await this.resolveOrganizationId(currentUser);
     if (proposal.deal.organization.id !== orgId) {
-      throw new ForbiddenException('You can only manage your own organization deals');
+      throw new ForbiddenException(
+        'You can only manage your own organization deals',
+      );
     }
 
     proposal.status = ProposalStatus.SELECTED;
@@ -267,7 +272,9 @@ export class DealsService {
 
     const orgId = await this.resolveOrganizationId(currentUser);
     if (deal.organization.id !== orgId) {
-      throw new ForbiddenException('You can only view proposals for your own deals');
+      throw new ForbiddenException(
+        'You can only view proposals for your own deals',
+      );
     }
 
     return this.proposalsRepo.find({

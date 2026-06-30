@@ -244,50 +244,60 @@ export class EvaluationSlotService {
       const repo = manager.getRepository(EvaluationSlot);
       const slot = await repo.findOne({
         where: { id: privateAttemptId },
-        relations: { privateChild: true, parent: true },
-        lock: { mode: 'pessimistic_write' },
+        lock: {
+          mode: 'pessimistic_write',
+        },
       });
 
       if (!slot) throw new NotFoundException('Attempt request not found');
-      if (slot.kind !== SlotKind.EXTRA) {
+
+      const slotWithRelations = await repo.findOneOrFail({
+        where: { id: slot.id },
+        relations: {
+          privateChild: true,
+          parent: true,
+        },
+      });
+
+      if (slotWithRelations.kind !== SlotKind.EXTRA) {
         throw new BadRequestException('Not an extra attempt request');
       }
-      if (slot.status !== SlotStatus.REQUESTED) {
+      if (slotWithRelations.status !== SlotStatus.REQUESTED) {
         throw new BadRequestException('Extra attempt is not awaiting approval');
       }
-      if (!slot.requiresApproval) {
+      if (!slotWithRelations.requiresApproval) {
         throw new BadRequestException(
           'Extra attempt does not require approval',
         );
       }
 
-      slot.transitionTo(SlotStatus.AWAITING_PAYMENT);
+      slotWithRelations.transitionTo(SlotStatus.AWAITING_PAYMENT);
 
       const parentUserId =
         await this.parentProfilesService.getUserIdForParentProfile(
-          slot.parentId,
+          slotWithRelations.parentId,
         );
       const checkout = await this.payments.createPaymentForPrivateExtraAttempt(
         parentUserId,
         {
-          privateChildId: slot.privateChildId!,
-          privateAttemptId: slot.id,
+          privateChildId: slotWithRelations.privateChildId!,
+          privateAttemptId: slotWithRelations.id,
           amount: this.extraAttemptPriceSar(),
           description: 'Extra child evaluation attempt',
         },
       );
-      slot.paymentId = checkout.id;
+      slotWithRelations.paymentId = checkout.id;
 
-      await repo.save(slot);
+      await repo.save(slotWithRelations);
       await this.notifyPaymentRequired(
-        slot.parentId,
-        slot.privateChild!.name,
+        slotWithRelations.parentId,
+        slotWithRelations.privateChild!.name,
         checkout.checkoutUrl,
         checkout.expiresAt,
       );
 
       return {
-        attempt: slot,
+        attempt: slotWithRelations,
         payment: checkout,
       };
     });
@@ -403,16 +413,22 @@ export class EvaluationSlotService {
       const repo = manager.getRepository(EvaluationSlot);
       const row = await repo.findOne({
         where: { id: privateId },
-        relations: { privateChild: true },
         lock: { mode: 'pessimistic_write' },
       });
       if (!row) return;
       if (row.status !== SlotStatus.AWAITING_PAYMENT) return;
 
-      row.transitionTo(SlotStatus.READY);
-      row.isPaid = true;
-      row.paymentId = payload.paymentId;
-      await repo.save(row);
+      const rowWithRelations = await repo.findOneOrFail({
+        where: { id: row.id },
+        relations: {
+          privateChild: true,
+        },
+      });
+
+      rowWithRelations.transitionTo(SlotStatus.READY);
+      rowWithRelations.isPaid = true;
+      rowWithRelations.paymentId = payload.paymentId;
+      await repo.save(rowWithRelations);
       unlocked = true;
       childName = row.privateChild?.name || null;
     });
