@@ -75,10 +75,7 @@ export class PaymentsController {
     @Param('attemptId', new ParseUUIDPipe()) attemptId: string,
     @Req() req: AuthRequest,
   ) {
-    return this.slots.initiateOrRefreshExtraPayment(
-      attemptId,
-      req.user.userId,
-    );
+    return this.slots.initiateOrRefreshExtraPayment(attemptId, req.user.userId);
   }
 
   @Post(':id/retry')

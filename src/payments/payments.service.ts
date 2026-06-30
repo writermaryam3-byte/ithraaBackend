@@ -141,7 +141,7 @@ export class PaymentsService {
     const childExists = await this.dataSource
       .createQueryBuilder()
       .from('private_children', 'c')
-      .innerJoin('parent_profiles', 'p', 'c."parentId" = p.id')
+      .innerJoin('parents', 'p', 'c."parentId" = p.id')
       .where('c.id = :privateChildId', { privateChildId: input.privateChildId })
       .andWhere('p."userId" = :userId', { userId })
       .getCount();
