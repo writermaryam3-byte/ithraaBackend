@@ -55,7 +55,7 @@ export class AuthController {
       dto.email,
     );
     if (alreadyExists) {
-      throw new BadRequestException('User already exists');
+      throw new ConflictException('User already exists');
     }
     return this.authService.beneficiariesSignup(dto);
   }
