@@ -89,31 +89,35 @@ export class AuthController {
     if (!token) {
       throw new UnauthorizedException('Refresh token missing');
     }
+    try {
+      const payload = this.jwtService.verify<TokenPayload>(token);
+      const sessions = await this.sessionsService.findValidSessions(
+        payload.sub,
+      );
+      const matchedSession = (
+        await Promise.all(
+          sessions.map(async (session) => ({
+            session,
+            valid: await bcrypt.compare(token, session.refreshTokenHash),
+          })),
+        )
+      ).find((entry) => entry.valid)?.session;
 
-    const payload = this.jwtService.verify<TokenPayload>(token);
+      if (!matchedSession) {
+        await this.sessionsService.deleteAllUserSessions(payload.sub);
+        throw new UnauthorizedException('Session compromised');
+      }
 
-    const sessions = await this.sessionsService.findValidSessions(payload.sub);
-    const matchedSession = (
-      await Promise.all(
-        sessions.map(async (session) => ({
-          session,
-          valid: await bcrypt.compare(token, session.refreshTokenHash),
-        })),
-      )
-    ).find((entry) => entry.valid)?.session;
+      const user = await this.usersService.findById(payload.sub);
 
-    if (!matchedSession) {
-      await this.sessionsService.deleteAllUserSessions(payload.sub);
-      throw new UnauthorizedException('Session compromised');
+      if (!user) throw new UnauthorizedException();
+
+      await this.sessionsService.deleteSession(matchedSession.id);
+
+      return this.authService.login(user);
+    } catch {
+      throw new BadRequestException('Invalid or expired token');
     }
-
-    const user = await this.usersService.findById(payload.sub);
-
-    if (!user) throw new UnauthorizedException();
-
-    await this.sessionsService.deleteSession(matchedSession.id);
-
-    return this.authService.login(user);
   }
 
   @Delete('logout/:sessionId')

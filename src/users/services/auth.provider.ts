@@ -51,27 +51,30 @@ export class AuthProvider {
   }
 
   async verifyEmail(token: string) {
-    const payload = this.jwtService.verify<{
-      sub: string;
-      userId: string;
-      type: string;
-    }>(token);
+    try {
+      const payload = this.jwtService.verify<{
+        sub: string;
+        userId: string;
+        type: string;
+      }>(token);
+      if (payload.type !== 'email_verification') {
+        throw new BadRequestException('Invalid token type');
+      }
 
-    if (payload.type !== 'email_verification') {
-      throw new BadRequestException('Invalid token type');
+      const userId = payload.userId ?? payload.sub;
+      const user = await this.usersService.findById(userId);
+
+      if (!user) {
+        throw new NotFoundException('User not found');
+      }
+
+      user.isEmailVerified = true;
+      await this.usersService.save(user);
+
+      return { message: 'Email verified successfully', ok: true };
+    } catch {
+      throw new BadRequestException('Invalid or expired token');
     }
-
-    const userId = payload.userId ?? payload.sub;
-    const user = await this.usersService.findById(userId);
-
-    if (!user) {
-      throw new NotFoundException('User not found');
-    }
-
-    user.isEmailVerified = true;
-    await this.usersService.save(user);
-
-    return { message: 'Email verified successfully', ok: true };
   }
 
   async validateUser(phone: string, pass: string) {
