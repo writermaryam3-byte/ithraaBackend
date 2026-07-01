@@ -22,10 +22,16 @@ import { JwtModule } from '@nestjs/jwt';
     forwardRef(() => UsersModule),
     JwtModule.registerAsync({
       inject: [ConfigService],
-      useFactory: (config: ConfigService) => ({
-        secret: config.get<string>('JWT_SECRET'),
-        signOptions: { expiresIn: config.get('JWT_EXPIRESIN') },
-      }),
+      useFactory: (config: ConfigService) => {
+        console.log('JWT_SECRET =', config.get('JWT_SECRET'));
+
+        return {
+          secret: config.get<string>('JWT_SECRET'),
+          signOptions: {
+            expiresIn: config.get('JWT_EXPIRESIN'),
+          },
+        };
+      },
     }),
   ],
   controllers: [NotificationsController],
