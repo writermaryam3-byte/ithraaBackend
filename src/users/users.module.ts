@@ -10,7 +10,7 @@ import { SignupStrategyFactory } from './factories/signup.factory';
 import { JwtStrategy } from './strategies/jwt.strategy';
 import { AuthController } from './controllers/auth.controller';
 import { ConfigService } from '@nestjs/config';
-import { JwtModule } from '@nestjs/jwt';
+import { JwtModule, JwtService } from '@nestjs/jwt';
 import { PassportModule } from '@nestjs/passport';
 import { SessionModule } from 'src/session/session.module';
 import { UsersService } from './services/users.service';
@@ -43,6 +43,7 @@ import { ParentProfilesService } from './services/parent-profiles.service';
     SignupStrategyFactory,
     ParentsServices,
     EnrichersService,
+    JwtService,
     ParentProfilesService,
   ],
   imports: [
@@ -67,6 +68,13 @@ import { ParentProfilesService } from './services/parent-profiles.service';
       }),
     }),
   ],
-  exports: [TypeOrmModule, UsersService, AuthProvider, EnrichersService, ParentProfilesService],
+  exports: [
+    TypeOrmModule,
+    UsersService,
+    AuthProvider,
+    EnrichersService,
+    ParentProfilesService,
+    JwtService,
+  ],
 })
 export class UsersModule {}
