@@ -10,6 +10,8 @@ import { EmailProvider } from './providers/email.provider';
 import { InAppProvider } from './providers/inapp.provider';
 import { UsersModule } from 'src/users/users.module';
 import { EvaluationNotificationsListener } from './listeners/evaluation-notifications.listener';
+import { ConfigService } from '@nestjs/config';
+import { JwtModule } from '@nestjs/jwt';
 
 @Module({
   imports: [
@@ -18,6 +20,13 @@ import { EvaluationNotificationsListener } from './listeners/evaluation-notifica
       name: 'notifications',
     }),
     forwardRef(() => UsersModule),
+    JwtModule.registerAsync({
+      inject: [ConfigService],
+      useFactory: (config: ConfigService) => ({
+        secret: config.get<string>('JWT_SECRET'),
+        signOptions: { expiresIn: config.get('JWT_EXPIRESIN') },
+      }),
+    }),
   ],
   controllers: [NotificationsController],
   providers: [
