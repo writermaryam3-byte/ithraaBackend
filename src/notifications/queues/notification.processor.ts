@@ -5,7 +5,7 @@ import { EmailProvider } from '../providers/email.provider';
 import { InAppProvider } from '../providers/inapp.provider';
 import { NotificationDelivery } from '../enums/notification-delivery.enum';
 import type { NotificationSendJobPayload } from '../interfaces/notification-job.interface';
-import { JwtService } from '@nestjs/jwt';
+import { AuthProvider } from 'src/users/services/auth.provider';
 
 @Processor('notifications')
 export class NotificationProcessor {
@@ -14,7 +14,7 @@ export class NotificationProcessor {
   constructor(
     private readonly email: EmailProvider,
     private readonly inApp: InAppProvider,
-    private readonly jwtService: JwtService,
+    private readonly authService: AuthProvider,
   ) {}
 
   @OnQueueFailed({ name: 'send' })
@@ -61,12 +61,7 @@ export class NotificationProcessor {
           `Job ${job.id}: email delivery requested but no email address provided`,
         );
       }
-      const token = this.jwtService.sign(
-        { userId },
-        {
-          expiresIn: '10d',
-        },
-      );
+      const token = this.authService.generateVerificationToken(userId);
       await this.email.sendVerificationEmail(email, token);
     }
 

@@ -46,7 +46,7 @@ export class AuthProvider {
         sub: userId,
         type: 'email_verification',
       },
-      { expiresIn: '1d' },
+      { expiresIn: '10d' },
     );
   }
 
