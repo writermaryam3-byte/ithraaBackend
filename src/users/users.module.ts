@@ -10,7 +10,7 @@ import { SignupStrategyFactory } from './factories/signup.factory';
 import { JwtStrategy } from './strategies/jwt.strategy';
 import { AuthController } from './controllers/auth.controller';
 import { ConfigService } from '@nestjs/config';
-import { JwtModule, JwtService } from '@nestjs/jwt';
+import { JwtModule } from '@nestjs/jwt';
 import { PassportModule } from '@nestjs/passport';
 import { SessionModule } from 'src/session/session.module';
 import { UsersService } from './services/users.service';
@@ -43,7 +43,6 @@ import { ParentProfilesService } from './services/parent-profiles.service';
     SignupStrategyFactory,
     ParentsServices,
     EnrichersService,
-    JwtService,
     ParentProfilesService,
   ],
   imports: [
@@ -62,10 +61,16 @@ import { ParentProfilesService } from './services/parent-profiles.service';
     forwardRef(() => NotificationsModule),
     JwtModule.registerAsync({
       inject: [ConfigService],
-      useFactory: (config: ConfigService) => ({
-        secret: config.get<string>('JWT_SECRET'),
-        signOptions: { expiresIn: config.get('JWT_EXPIRESIN') },
-      }),
+      useFactory: (config: ConfigService) => {
+        console.log('JWT_SECRET =', config.get('JWT_SECRET'));
+
+        return {
+          secret: config.get<string>('JWT_SECRET'),
+          signOptions: {
+            expiresIn: config.get('JWT_EXPIRESIN'),
+          },
+        };
+      },
     }),
   ],
   exports: [
@@ -74,7 +79,6 @@ import { ParentProfilesService } from './services/parent-profiles.service';
     AuthProvider,
     EnrichersService,
     ParentProfilesService,
-    JwtService,
   ],
 })
 export class UsersModule {}
